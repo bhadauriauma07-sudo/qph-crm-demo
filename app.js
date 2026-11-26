@@ -31,7 +31,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 15;
+const APP_V = 16;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -202,26 +202,31 @@ function sendOtp() {
   authStep2();
 }
 function authStep2() {
-  const left = Math.max(0, 30 - Math.round((Date.now() - AUTH.sentAt) / 1000));
   $('authBox').innerHTML = `<img class="auth-logo" src="logo.png" alt="Quick Path Horizon">
   <h1>Enter the code</h1><p class="muted">We sent a 6-digit code to <b>${esc(mask(AUTH.value, AUTH.mode))}</b>.</p>
-  <div class="otp">${[0, 1, 2, 3, 4, 5].map(i => `<input inputmode="numeric" maxlength="1" data-i="${i}" oninput="otpIn(this)" onkeydown="otpKey(event,this)">`).join('')}</div>
-  ${AUTH.err ? `<div class="auth-err">${esc(AUTH.err)}</div>` : ''}
+  <div class="otp" onpaste="otpPaste(event)">${[0, 1, 2, 3, 4, 5].map(i => `<input inputmode="numeric" autocomplete="${i === 0 ? 'one-time-code' : 'off'}" maxlength="6" data-i="${i}" oninput="otpIn(this)" onkeydown="otpKey(event,this)" onfocus="this.select()">`).join('')}</div>
+  <div class="auth-err" id="otpErr">${esc(AUTH.err || '')}</div>
   <div class="auth-demo-code">Demo OTP: <b>${AUTH.code}</b><small>In the live CRM this code is sent by ${AUTH.mode === 'email' ? 'email' : 'SMS / WhatsApp'}.</small></div>
   <button class="btn btn-primary auth-btn" onclick="verifyOtp()">Verify & sign in</button>
-  <div class="auth-links"><a onclick="AUTH.err='';authStep1()">← Change ${AUTH.mode === 'email' ? 'email' : 'number'}</a>${left ? `<span class="muted">Resend in ${left}s</span>` : `<a onclick="sendOtpAgain()">Resend code</a>`}</div>`;
+  <div class="auth-links"><a onclick="AUTH.err='';clearInterval(authStep2.t);authStep1()">← Change ${AUTH.mode === 'email' ? 'email' : 'number'}</a><span id="otpResend"></span></div>`;
   setTimeout(() => { const f = document.querySelector('.otp input'); if (f) f.focus(); }, 30);
-  clearTimeout(authStep2.t); if (left) authStep2.t = setTimeout(() => { if (!$('login').hidden && document.querySelector('.otp')) { const vals = [...document.querySelectorAll('.otp input')].map(i => i.value); authStep2(); document.querySelectorAll('.otp input').forEach((i, k) => i.value = vals[k] || ''); } }, 1000);
+  /* countdown updates only its own text, so typing is never interrupted */
+  const tick = () => { const el = $('otpResend'); if (!el) return clearInterval(authStep2.t); const left = Math.max(0, 30 - Math.round((Date.now() - AUTH.sentAt) / 1000)); el.innerHTML = left ? `<span class="muted">Resend in ${left}s</span>` : `<a onclick="sendOtpAgain()">Resend code</a>`; if (!left) clearInterval(authStep2.t); };
+  clearInterval(authStep2.t); tick(); authStep2.t = setInterval(tick, 1000);
 }
+function otpBoxes() { return [...document.querySelectorAll('.otp input')]; }
+function otpFill(digits, from = 0) { const b = otpBoxes(); digits.split('').forEach((d, k) => { if (b[from + k]) b[from + k].value = d; }); const next = b.find(x => !x.value); (next || b[b.length - 1]).focus(); if (b.every(x => x.value)) verifyOtp(); }
 function sendOtpAgain() { AUTH.code = String(Math.floor(100000 + Math.random() * 900000)); AUTH.exp = Date.now() + 5 * 60e3; AUTH.sentAt = Date.now(); AUTH.err = ''; authStep2(); toast('New code sent'); }
-function otpIn(el) { el.value = el.value.replace(/\D/g, '').slice(-1); if (el.value && el.nextElementSibling) el.nextElementSibling.focus(); if ([...document.querySelectorAll('.otp input')].every(i => i.value)) verifyOtp(); }
-function otpKey(e, el) { if (e.key === 'Backspace' && !el.value && el.previousElementSibling) el.previousElementSibling.focus(); if (e.key === 'Enter') verifyOtp(); }
+function otpIn(el) { const d = el.value.replace(/\D/g, ''); if ($('otpErr')) $('otpErr').textContent = ''; if (d.length > 1) { el.value = ''; return otpFill(d.slice(0, 6), +el.dataset.i); } el.value = d; if (d) otpFill('', 0); }
+function otpPaste(e) { const d = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6); if (!d) return; e.preventDefault(); otpBoxes().forEach(x => x.value = ''); otpFill(d, 0); }
+function otpKey(e, el) { if (e.key === 'Backspace' && !el.value && el.previousElementSibling) { el.previousElementSibling.value = ''; el.previousElementSibling.focus(); e.preventDefault(); } if (e.key === 'Enter') verifyOtp(); }
 function verifyOtp() {
   const code = [...document.querySelectorAll('.otp input')].map(i => i.value).join('');
-  if (code.length < 6) { AUTH.err = 'Enter all 6 digits'; return authStep2(); }
-  if (Date.now() > AUTH.exp) { AUTH.err = 'Code expired. Tap Resend code.'; return authStep2(); }
-  if (code !== AUTH.code) { AUTH.err = 'Wrong code. Please check and try again.'; return authStep2(); }
-  clearTimeout(authStep2.t); const uid = AUTH.uid; AUTH = { mode: AUTH.mode, value: '', uid: null, code: '', exp: 0, err: '' }; login(uid);
+  const err = t => { $('otpErr').textContent = t; };
+  if (code.length < 6) return err('Enter all 6 digits');
+  if (Date.now() > AUTH.exp) return err('Code expired. Tap Resend code.');
+  if (code !== AUTH.code) { err('Wrong code. Please check and try again.'); otpBoxes().forEach(x => x.value = ''); otpBoxes()[0].focus(); return; }
+  clearInterval(authStep2.t); const uid = AUTH.uid; AUTH = { mode: AUTH.mode, value: '', uid: null, code: '', exp: 0, err: '' }; login(uid);
 }
 $('menuBtn').onclick = () => { $('side').classList.toggle('open'); $('scrim').classList.toggle('open'); };
 $('scrim').onclick = () => { $('side').classList.remove('open'); $('scrim').classList.remove('open'); };
