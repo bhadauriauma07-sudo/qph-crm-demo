@@ -1,11 +1,11 @@
 /* QPH CRM demo — app */
-const KEY = 'qph_crm_demo_v1';
+const KEY = 'qph_crm_demo_v2';
 let S = load();
 let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-let leadFilter = { stage: '', source: '', campaign: '', owner: '', temp: '', dup: false };
+let leadFilter = { stage: '', source: '', campaign: '', owner: '', temp: '', dup: false, pay: false };
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
 let waOpen = null;
 let setTab = 'team', campTab = 'campaign', opsMine = false;
@@ -111,9 +111,10 @@ function ingest(d) {
   const owner = dup ? dup.owner : (d.owner || sales[(S.rr++) % sales.length].id);
   const z = S.zones.find(x => x.type === (d.reqType || 'Free Zone')) || S.zones[0];
   const l = { id: nextId(), name: d.name, phone: d.phone, email: d.email || '', nationality: d.nationality || '', source: d.source, stage: 'New', temp: 'Warm', owner, createdAt: Date.now(), updatedAt: Date.now(),
-    service: d.service || 'Free Zone Company', req: { type: d.reqType || 'Free Zone', zone: z.id, activity: d.activity || '', visas: +d.visas || 1 }, value: 0, followUp: null,
-    tags: [], notes: [], activity: [], proposals: [], dupOf: null, payment: null, reason: '', attr: d.attr || { platform: '', campaign: '', adset: '', ad: '', form: '', utm: {}, clickId: '', landing: '' } };
+    service: d.service || 'Free Zone Company', req: { type: d.reqType || 'Free Zone', zone: '', activity: d.activity || '', visas: +d.visas || 1 }, value: 0, followUp: null,
+    tags: [], notes: [], activity: [], proposals: [], dupOf: null, payment: null, reason: '', contact: {}, interested: '', appt: {}, payLink: null, ncReason: '', retryAt: null, attr: d.attr || { platform: '', campaign: '', adset: '', ad: '', form: '', utm: {}, clickId: '', landing: '' } };
   l.value = estimate({ zone: z.id, visas: l.req.visas, acts: 3, addons: [] }).total;
+  if (d.source === 'WhatsApp' || d.sendWelcome) l.contact.wa = false;
   if (d.note) l.notes.push({ by: ME.id, at: Date.now(), text: d.note, polished: false });
   l.activity.push({ at: Date.now(), by: 'system', text: `Lead created from ${d.source}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : ''}${l.attr.adset ? ' › ' + l.attr.adset : ''}${l.attr.ad ? ' › ' + l.attr.ad : ''}` });
   if (dup) {
@@ -161,23 +162,24 @@ function navItems() {
   const newN = L.filter(l => l.stage === 'New').length;
   const renew = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 60 * D).length;
   const items = {
-    admin: [['h', 'Overview'], ['dashboard', '📊', 'Dashboard'], ['campaigns', '🎯', 'Campaigns & UTM'], ['h', 'Sales'], ['leads', '👥', 'All Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['duplicates', '🧬', 'Duplicates', dups, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '🧮', 'Cost Calculator'], ['h', 'Operations'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed').length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '⚙️', 'Settings']],
-    sales: [['h', 'My work'], ['dashboard', '📊', 'My Dashboard'], ['leads', '👥', 'My Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['duplicates', '🧬', 'Duplicates', dups, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
+    admin: [['h', 'Overview'], ['dashboard', '📊', 'Dashboard'], ['campaigns', '🎯', 'Campaigns & UTM'], ['h', 'Sales'], ['leads', '👥', 'All Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '🧮', 'Cost Calculator'], ['h', 'Operations'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed').length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '⚙️', 'Settings']],
+    sales: [['h', 'My work'], ['dashboard', '📊', 'My Dashboard'], ['leads', '👥', 'My Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
     ops: [['h', 'Operations'], ['dashboard', '📊', 'Ops Dashboard'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
   }[ME.role];
   return items.map(i => i[0] === 'h' ? { h: i[1] } : { id: i[0], ic: i[1], label: i[2], badge: i[3], cls: i[4] });
 }
-function go(r) { route = r; location.hash = r; $('side').classList.remove('open'); $('scrim').classList.remove('open'); render(); window.scrollTo(0, 0); }
+function go(r) { drawer = null; route = r; location.hash = r; $('side').classList.remove('open'); $('scrim').classList.remove('open'); render(); window.scrollTo(0, 0); }
 
 function render() {
   const items = navItems();
   $('nav').innerHTML = items.map(n => n.h ? `<div class="nav-h">${n.h}</div>` : `<a class="nav-i ${route === n.id ? 'on' : ''}" onclick="go('${n.id}')"><span class="ic">${n.ic}</span>${n.label}${n.badge ? `<span class="badge ${n.cls || ''}">${n.badge}</span>` : ''}</a>`).join('');
   const cur = items.find(n => n.id === route); $('pageTitle').textContent = cur ? cur.label : '';
   $('bellCount').textContent = alerts().length || '';
-  const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, followups: vFollowups, duplicates: vDuplicates, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
+  const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, followups: vFollowups, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
+  if (drawer && drawer.kind === 'lead') { $('pageTitle').textContent = 'Lead'; $('view').innerHTML = leadPage(); return; }
   $('view').innerHTML = V();
   if (route === 'whatsapp') { const m = document.querySelector('.wa-msgs'); if (m) m.scrollTop = m.scrollHeight; }
-  if (drawer) renderDrawer();
+  if (drawer && drawer.kind === 'case') renderDrawer();
 }
 
 /* ---------------- dashboards ---------------- */
@@ -187,7 +189,7 @@ function bars(rows, cls = '') { const max = Math.max(1, ...rows.map(r => r[1]));
 function funnel(L) { return bars(FUNNEL.map(st => { const idx = STAGES.indexOf(st); return [st, L.filter(l => { const i = STAGES.indexOf(l.stage); return st === 'New' ? true : (i >= idx && i <= 9); }).length]; })); }
 function countBy(arr, fn) { const m = {}; arr.forEach(x => { const k = fn(x); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }
 function leadLi(l, right) { return `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div><b>${esc(l.name)}</b> ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}<div class="small muted">${esc(l.source)}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + esc(l.attr.campaign) : ''}</div></div><div class="r">${right || pill(l.stage)}</div></li>`; }
-function filterGo(f) { leadFilter = Object.assign({ stage: '', source: '', campaign: '', owner: '', temp: '', dup: false }, f); go('leads'); }
+function filterGo(f) { leadFilter = Object.assign({ stage: '', source: '', campaign: '', owner: '', temp: '', dup: false, pay: false }, f); drawer = null; go('leads'); }
 
 function vAdminDash() {
   const L = S.leads.filter(l => inPeriod(l.createdAt));
@@ -208,7 +210,8 @@ function vAdminDash() {
     ${stat('Closed won', won.length, L.length ? Math.round(won.length / L.length * 100) + '% conversion' : '', "filterGo({stage:'Closed Won'})")}
     ${stat('Payments received', aed(rev), paid.length + ' payments', "filterGo({stage:'Payment Received'})")}
     ${stat('Ad spend · CPL', aed(spend), 'CPL ' + aed(paidLeads ? spend / paidLeads : 0), "go('campaigns')")}
-    ${stat('Duplicates caught', dups, 'auto-tagged', "go('duplicates')", dups ? 'warn' : '')}
+    ${stat('Payments to confirm', S.leads.filter(l => l.payment && l.payment.status === 'pending').length, 'Accounts approval', "filterGo({pay:true})", S.leads.some(l => l.payment && l.payment.status === 'pending') ? 'warn' : '')}
+    ${stat('Duplicates caught', dups, 'auto-tagged', "filterGo({dup:true})", dups ? 'warn' : '')}
     ${stat('Follow-ups due', fuDue, 'overdue + next 12h', "go('followups')", fuDue ? 'warn' : '')}
     ${stat('Pipeline value', aed(pipe), 'qualified → payment link', "filterGo({stage:'Proposal Sent'})")}
     ${stat('Not contacted', notC, 'untouched > 2h', "filterGo({stage:'New'})", notC ? 'warn' : '')}
@@ -297,7 +300,7 @@ function expiryPill(ts) { const d = Math.round((ts - Date.now()) / D); return d 
 /* ---------------- leads ---------------- */
 function filteredLeads() {
   const q = $('q').value.trim().toLowerCase(); const f = leadFilter;
-  return visibleLeads().filter(l => (!f.stage || l.stage === f.stage) && (!f.source || l.source === f.source) && (!f.campaign || l.attr.campaign === f.campaign) && (!f.owner || l.owner === f.owner) && (!f.temp || l.temp === f.temp) && (!f.dup || l.dupOf || dupsOf(l.id).length)
+  return visibleLeads().filter(l => (!f.stage || l.stage === f.stage) && (!f.source || l.source === f.source) && (!f.campaign || l.attr.campaign === f.campaign) && (!f.owner || l.owner === f.owner) && (!f.temp || l.temp === f.temp) && (!f.dup || l.dupOf || dupsOf(l.id).length) && (!f.pay || (l.payment && l.payment.status === 'pending'))
     && (!q || [l.name, l.phone, l.email, l.id, l.attr.campaign, l.attr.adset, l.attr.ad, ...(l.tags || [])].join(' ').toLowerCase().includes(q) || normPhone(q).length > 5 && normPhone(l.phone).includes(normPhone(q))))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -361,135 +364,212 @@ function mergeDup(id) {
 }
 function notDup(id) { const d = S.leads.find(l => l.id === id); log(d, `Marked NOT a duplicate of ${d.dupOf}`); d.dupOf = null; d.tags = d.tags.filter(t => t !== 'Duplicate'); save(); render(); toast('Duplicate tag removed'); }
 
-/* ---------------- lead drawer ---------------- */
-function openLead(id) { drawer = { kind: 'lead', id }; $('drawerBg').classList.add('open'); renderDrawer(); }
+/* ---------------- stage qualifying criteria ---------------- */
+const PIPE = ['New', 'Contacted', 'Follow-up', 'Appointment Booked', 'Qualified', 'Proposal Sent', 'Payment Link Sent', 'Payment Received', 'Closed Won'];
+const has = v => v !== undefined && v !== null && String(v).trim() !== '';
+const CRIT = {
+  'New': () => [],
+  'Contacted': l => [
+    [normPhone(l.phone).length >= 8, 'Valid phone number on the lead'],
+    [l.contact.wa || l.contact.call || l.contact.email, 'Tick at least one: WhatsApp sent, Called or Email sent'],
+  ],
+  'Not Contacted': l => [[has(l.ncReason), 'Reason (not reachable, switched off, busy…)'], [has(l.retryAt), 'Retry date & time']],
+  'Follow-up': l => [...CRIT['Contacted'](l), [has(l.followUp), 'Follow-up date & time']],
+  'Appointment Booked': l => [...CRIT['Contacted'](l), [has(l.appt.at), 'Appointment date & time'], [has(l.appt.place), 'Meeting place']],
+  'Qualified': l => [...CRIT['Contacted'](l),
+    [l.interested === 'Yes', 'Customer confirmed interested'],
+    [has(l.req.type), 'Jurisdiction (Free Zone / Mainland / Offshore)'],
+    [has(l.req.zone) && zoneOf(l.req.zone).type === l.req.type, l.req.type === 'Free Zone' ? 'Free zone selected' : 'Authority selected'],
+    [has(l.req.activity), 'Exact business activity'],
+    [has(l.req.visas), 'Number of visas'],
+    [has(l.nationality), 'Nationality']],
+  'Proposal Sent': l => [...CRIT['Qualified'](l), [l.proposals.some(p => p.pdf), 'Proposal PDF uploaded (or generated from calculator)']],
+  'Payment Link Sent': l => [...CRIT['Proposal Sent'](l), [l.payLink && +l.payLink.amount > 0, 'Payment amount'], [l.payLink && has(l.payLink.url), 'Payment link']],
+  'Payment Received': l => [...CRIT['Proposal Sent'](l),
+    [l.payment && +l.payment.amount > 0, 'Amount received'], [l.payment && has(l.payment.mode), 'Payment mode'],
+    [l.payment && has(l.payment.ref), 'Reference / transaction code'],
+    [l.payment && l.payment.status === 'confirmed', 'Confirmed by Accounts team']],
+  'Closed Won': l => [...CRIT['Payment Received'](l)],
+  'Lost': l => [[has(l.reason), 'Lost reason']], 'Junk': l => [[has(l.reason), 'Junk reason']],
+};
+const missing = (l, s) => (CRIT[s] ? CRIT[s](l) : []).filter(c => !c[0]).map(c => c[1]);
+function nextStage(l) { const i = PIPE.indexOf(l.stage); return i >= 0 && i < PIPE.length - 1 ? (l.stage === 'New' ? 'Contacted' : PIPE[i + 1]) : (l.stage === 'Not Contacted' ? 'Contacted' : null); }
+function tryStage(id, s) {
+  const l = S.leads.find(x => x.id === id); if (s === l.stage) return;
+  const back = PIPE.indexOf(s) >= 0 && PIPE.indexOf(l.stage) > PIPE.indexOf(s);
+  if (s === 'Lost' || s === 'Junk') return reasonModal(id, s);
+  const m = back ? [] : missing(l, s);
+  if (m.length) return modal(`<h2>🔒 Can't move to "${s}" yet</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
+  if (s === 'Closed Won') openCaseFor(l);
+  if (s === 'Payment Received' || s === 'Closed Won' || s === 'Proposal Sent') l.followUp = s === 'Proposal Sent' ? (l.followUp || Date.now() + D) : null;
+  log(l, `Stage changed ${l.stage} → ${s}${back ? ' (moved back)' : ''}`); l.stage = s; save(); render(); toast('Stage → ' + s);
+}
+function reasonModal(id, s) {
+  const l = S.leads.find(x => x.id === id);
+  modal(`<h2>Mark ${s}</h2><div class="muted small">${esc(l.name)}</div><div class="form"><div class="full"><label>Reason (required)</label><select id="rsn"><option value="">Select…</option>${LOST_REASONS.map(r => `<option>${r}</option>`).join('')}</select></div></div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="if(!$('rsn').value)return toast('Pick a reason');const l=S.leads.find(x=>x.id==='${id}');l.reason=$('rsn').value;l.followUp=null;log(l,'Stage changed '+l.stage+' → ${s} · '+l.reason);l.stage='${s}';save();closeModal();render();toast('Marked ${s}')">Mark ${s}</button></div>`);
+}
+
+/* ---------------- lead page (Digimac style) ---------------- */
+function openLead(id) { drawer = { kind: 'lead', id }; $('drawerBg').classList.remove('open'); render(); window.scrollTo(0, 0); }
 function openCase(id) { drawer = { kind: 'case', id }; $('drawerBg').classList.add('open'); renderDrawer(); }
-function closeDrawer() { drawer = null; $('drawerBg').classList.remove('open'); }
-function renderDrawer() { if (!drawer) return; $('drawer').innerHTML = drawer.kind === 'lead' ? leadDrawer() : caseDrawer(); }
-function navLead(dir) { const L = route === 'leads' ? filteredLeads() : visibleLeads(); const i = L.findIndex(l => l.id === drawer.id); const n = L[i + dir]; if (n) { drawer.id = n.id; renderDrawer(); } }
-function leadDrawer() {
-  const l = S.leads.find(x => x.id === drawer.id); if (!l) { closeDrawer(); return ''; }
+function closeDrawer() { const wasLead = drawer && drawer.kind === 'lead'; drawer = null; $('drawerBg').classList.remove('open'); if (wasLead && ME) render(); }
+function renderDrawer() { if (drawer && drawer.kind === 'case') $('drawer').innerHTML = caseDrawer(); }
+function leadNavList() { return route === 'leads' ? filteredLeads() : visibleLeads().slice().sort((a, b) => b.createdAt - a.createdAt); }
+function navLead(dir) { const L = leadNavList(); const i = L.findIndex(l => l.id === drawer.id); const n = L[i + dir]; if (n) { drawer.id = n.id; render(); window.scrollTo(0, 0); } }
+function setL(id, path, val) {
+  const l = S.leads.find(x => x.id === id); const keys = path.split('.'); let o = l; keys.slice(0, -1).forEach(k => { o[k] = o[k] || {}; o = o[k]; });
+  const k = keys[keys.length - 1]; const old = o[k]; o[k] = val;
+  if (path === 'req.type') { const z = S.zones.find(z => z.type === val); l.req.zone = val === 'Free Zone' ? '' : (z ? z.id : ''); }
+  if (path === 'phone' || path === 'email') { const d = findDup(l.phone, l.email, l.id); if (d && !l.dupOf && d.id !== l.id) { l.dupOf = d.id; l.tags.push('Duplicate'); toast('⚠ Already exists on ' + d.id + ' — tagged Duplicate'); } }
+  if (path.startsWith('req.') && has(l.req.zone)) l.value = estimate({ zone: l.req.zone, visas: l.req.visas, acts: 3, addons: ['medical'] }).total;
+  if (String(old ?? '') !== String(val ?? '')) log(l, `${path.replace('req.', '').replace('appt.', 'appointment ').replace('contact.', '')} → ${typeof val === 'boolean' ? (val ? 'yes' : 'no') : (/At$|^followUp$|appt\.at/.test(path) && val ? fmtDate(val) : val)}`);
+  save(); render();
+}
+function inp(l, path, type = 'text', extra = '') { const v = path.split('.').reduce((o, k) => (o || {})[k], l); const val = type === 'datetime-local' ? (v ? toInput(v) : '') : (v ?? ''); const conv = type === 'datetime-local' ? 'this.value?new Date(this.value).getTime():null' : type === 'number' ? "this.value===''?'':+this.value" : 'this.value'; return `<input type="${type}" value="${esc(val)}" ${extra} onchange="setL('${l.id}','${path}',${conv})">`; }
+function sel(l, path, opts, ph = 'Select…') { const v = path.split('.').reduce((o, k) => (o || {})[k], l) ?? ''; return `<select onchange="setL('${l.id}','${path}',this.value)"><option value="">${ph}</option>${opts.map(o => { const [k, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>`; }
+const req = (label, ok) => `<label>${label}${ok === false ? ' <b style="color:var(--red)">*</b>' : ok ? ' <span style="color:var(--green)">✓</span>' : ''}</label>`;
+
+function leadPage() {
+  const l = S.leads.find(x => x.id === drawer.id); if (!l) { drawer = null; return ''; }
+  const L = leadNavList(); const pos = L.findIndex(x => x.id === l.id);
   const o = l.dupOf ? S.leads.find(x => x.id === l.dupOf) : null; const kids = dupsOf(l.id);
-  const z = zoneOf(l.req.zone); const a = l.attr; const u = a.utm || {};
-  const canEdit = ME.role === 'admin' || l.owner === ME.id;
-  const ai = l.ai;
-  return `<div class="dr-h"><div class="top">${av(l.owner, 36)}<div><h2>${esc(l.name)}</h2><div class="small muted">${l.id} · ${esc(l.phone)} · ${esc(l.email)}</div></div>
-    <div class="x" style="display:flex;gap:4px"><button class="btn btn-sm" onclick="navLead(-1)" title="Previous lead">‹</button><button class="btn btn-sm" onclick="navLead(1)" title="Next lead">›</button><button class="icon-btn" onclick="closeDrawer()">✕</button></div></div>
-    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${pill(l.stage)} ${pill(l.temp)} ${pill(l.source)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')} <button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div>
-    <div class="dr-actions">
-      <button class="btn btn-navy btn-sm" onclick="stageModal('${l.id}')">Change stage ▾</button>
-      <button class="btn btn-wa btn-sm" onclick="openChat('${l.id}')">💬 WhatsApp</button>
-      <a class="btn btn-sm" href="tel:${esc(l.phone)}">📞 Call</a>
-      <button class="btn btn-sm" onclick="proposalFor('${l.id}')">🧮 Create proposal</button>
-      <button class="btn btn-ai btn-sm" onclick="runAI('${l.id}')">✨ AI next step</button>
-      ${canEdit ? `<button class="btn btn-sm" onclick="editLead('${l.id}')">✎ Edit</button>` : ''}
-      ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">Delete</button>` : ''}
-    </div></div>
-  <div class="dr-b">
+  const a = l.attr; const u = a.utm || {}; const ci = PIPE.indexOf(l.stage);
+  const nx = nextStage(l); const nxCrit = nx ? CRIT[nx](l) : [];
+  const isClosed = ['Lost', 'Junk'].includes(l.stage);
+  const zonesOfType = S.zones.filter(z => z.type === l.req.type);
+  const qmiss = c => !has(c);
+  const pay = l.payment || {};
+  return `<div class="lp">
+  <a class="back" onclick="closeDrawer()">← Back</a>
+  <div class="lp-h">
+    <div class="lp-av" style="background:${user(l.owner).color}">${initials(l.name)}</div>
+    <div style="flex:1;min-width:0"><h2>${esc(l.name)}</h2>
+      <div class="lp-meta">📱 ${esc(l.phone)} · ✉ ${esc(l.email || '—')} · ${esc(l.source)}${a.platform ? ' – ' + esc(a.platform) : ''} · Created ${ago(l.createdAt)}</div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${pill('● ' + l.stage, 'p-' + slug(l.stage))} ${l.temp === 'Hot' ? pill('🔥 Hot', 'p-hot') : pill(l.temp)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')}<button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div></div>
+    <div class="lp-nav"><button class="btn btn-sm" onclick="navLead(-1)" ${pos <= 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${pos + 1} / ${L.length}</span><button class="btn btn-sm" onclick="navLead(1)" ${pos >= L.length - 1 ? 'disabled' : ''}>Next ›</button><button class="icon-btn" onclick="closeDrawer()">✕</button></div>
+  </div>
+  <div class="dr-actions">
+    <a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="setL('${l.id}','contact.call',true)">📞 Call</a>
+    <button class="btn btn-sm" onclick="openChat('${l.id}')"><span style="color:var(--wa)">●</span> WhatsApp</button>
+    <a class="btn btn-sm" href="mailto:${esc(l.email)}" onclick="setL('${l.id}','contact.email',true)">✉ Email</a>
+    <button class="btn btn-sm" onclick="proposalFor('${l.id}')">▤ Create proposal</button>
+    <button class="btn btn-sm" onclick="document.getElementById('sec-fu').scrollIntoView({behavior:'smooth'})">⏰ Reminder</button>
+    <button class="btn btn-ai btn-sm" onclick="runAI('${l.id}')">✨ AI next step</button>
+    <span style="flex:1"></span>
+    ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">🗑 Delete</button>` : ''}
+  </div>
+  <div class="pipe">${PIPE.map((s, i) => { const done = !isClosed && ci > i; const cur = l.stage === s; const lock = !done && !cur && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''} ${lock ? 'lock' : ''}" onclick="tryStage('${l.id}','${s}')" title="${lock ? 'Locked — needs: ' + esc(missing(l, s).join(', ')) : s}">${lock ? '🔒 ' : done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
+  ${isClosed ? `<div class="dup-box"><b>${esc(l.stage)}</b><span>Reason: ${esc(l.reason)}</span><button class="btn btn-sm" onclick="tryStage('${l.id}','New')">Re-open as New</button></div>` : ''}
+
+  <div class="lp-grid"><div class="lp-main">
     ${o ? `<div class="dup-box"><div style="font-size:22px">⚠️</div><div style="flex:1;min-width:200px"><b>Duplicate lead</b><div class="small">Same ${normPhone(o.phone) === normPhone(l.phone) ? 'phone' : 'email'} as <a onclick="openLead('${o.id}')" style="cursor:pointer;font-weight:700">${o.id} · ${esc(o.name)}</a> (${esc(o.stage)}, first came from ${esc(o.source)} ${ago(o.createdAt)}).</div></div><button class="btn btn-sm btn-primary" onclick="mergeDup('${l.id}')">Merge into original</button><button class="btn btn-sm" onclick="notDup('${l.id}')">Not a duplicate</button></div>` : ''}
     ${kids.length ? `<div class="dup-box" style="background:#FFF8EC;border-color:#F3D19C"><div style="font-size:22px">🔁</div><div style="flex:1"><b style="color:var(--amber)">Re-enquired ${kids.length}×</b><div class="small">${kids.map(k => `<a style="cursor:pointer" onclick="openLead('${k.id}')">${k.id}</a> via ${esc(k.source)} ${esc(k.attr.campaign || '')} (${ago(k.createdAt)})`).join('<br>')}</div></div></div>` : ''}
-    ${ai ? `<div class="ai-box"><b>✨ AI Agent</b> <span class="small muted">· ${fmtDate(ai.at)}</span><div style="margin-top:6px"><b style="color:var(--navy)">Summary:</b> ${esc(ai.summary)}</div><div style="margin-top:4px"><b style="color:var(--navy)">Next step:</b> ${esc(ai.next)}</div></div>` : ''}
-    <div class="card"><div class="card-h"><h2>Contact & requirement</h2></div><div class="card-b kv three">
-      <div><span>Phone</span><b>${esc(l.phone)}</b></div><div><span>Email</span><b>${esc(l.email || '—')}</b></div><div><span>Nationality</span><b>${esc(l.nationality || '—')}</b></div>
-      <div><span>Service</span><b>${esc(l.service)}</b></div><div><span>Jurisdiction</span><b>${esc(l.req.type)}</b></div><div><span>Zone</span><b>${esc(z.name)}</b></div>
-      <div><span>Activity</span><b>${esc(l.req.activity || '—')}</b></div><div><span>Visas</span><b>${l.req.visas}</b></div><div><span>Deal value</span><b>${aed(l.value)}</b></div>
-      <div><span>Follow-up</span><b>${l.followUp ? fmtDate(l.followUp) : '—'}</b></div><div><span>Owner</span><b>${esc(user(l.owner).name)}</b></div><div><span>${l.reason ? 'Reason' : 'Created'}</span><b>${esc(l.reason || fmtDate(l.createdAt))}</b></div>
-    </div></div>
-    <div class="card attr"><div class="card-h"><h2>📍 Lead source & tracking</h2><span class="pill ${l.source === 'Meta' ? 'p-meta' : l.source === 'Google' ? 'p-google' : 'p-' + slug(l.source)}">${esc(l.source)} ${a.platform ? '· ' + esc(a.platform) : ''}</span></div><div class="card-b">
-      <div class="kv three">
-        <div><span>Campaign name</span><b>${esc(a.campaign || '—')}</b></div><div><span>Ad set / Ad group</span><b>${esc(a.adset || '—')}</b></div><div><span>Ad name</span><b>${esc(a.ad || '—')}</b></div>
-        <div><span>Form / entry</span><b>${esc(a.form || '—')}</b></div><div><span>Landing page</span><b class="small">${esc(a.landing || '—')}</b></div><div><span>Click ID</span><b class="mono">${esc(a.clickId || '—')}</b></div>
+    ${l.ai ? `<div class="ai-box"><b>✨ AI Agent</b> <span class="small muted">· ${fmtDate(l.ai.at)}</span><div style="margin-top:6px"><b style="color:var(--navy)">Summary:</b> ${esc(l.ai.summary)}</div><div style="margin-top:4px"><b style="color:var(--navy)">Next step:</b> ${esc(l.ai.next)}</div></div>` : ''}
+
+    <div class="card"><div class="card-h"><h2>1 · Contact status</h2><span class="small muted">Unlocks: Contacted</span></div><div class="card-b">
+      <div class="cs3">
+        <button class="${l.stage === 'New' ? 'on' : ''}" onclick="tryStage('${l.id}','New')">● New</button>
+        <button class="${ci >= 1 ? 'on ok' : ''}" onclick="tryStage('${l.id}','Contacted')">✓ Contacted</button>
+        <button class="${l.stage === 'Not Contacted' ? 'on bad' : ''}" onclick="tryStage('${l.id}','Not Contacted')">✕ Not contacted</button>
       </div>
-      <div style="margin-top:12px" class="kv three">${['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].map(k => `<div><span>${k}</span><b class="mono">${esc(u[k] || '—')}</b></div>`).join('')}</div>
-      ${(l.touches || []).length ? `<div class="small muted" style="margin-top:10px"><b>Other touches (merged):</b> ${l.touches.map(t => `${esc(t.source)} · ${esc(t.attr.campaign || '')} (${fmtDate(t.at, false)})`).join(' · ')}</div>` : ''}
+      <div class="chk-row">${[['wa', 'WhatsApp sent'], ['call', 'Called'], ['email', 'Email sent']].map(([k, t]) => `<label class="chk ${l.contact[k] ? 'on' : ''}"><input type="checkbox" ${l.contact[k] ? 'checked' : ''} onchange="setL('${l.id}','contact.${k}',this.checked)"> ${t}</label>`).join('')}</div>
+      <div class="form" style="margin-top:10px"><div>${req('If not contacted — reason')}${sel(l, 'ncReason', NOT_CONTACTED_REASONS)}</div><div>${req('Retry at')}${inp(l, 'retryAt', 'datetime-local')}</div></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Junk')">🗑 Mark junk</button><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Lost')">Mark lost</button></div>
     </div></div>
+
+    <div class="card"><div class="card-h"><h2>2 · Lead details & qualification</h2><span class="small muted">* required to unlock Qualified</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
+      <div>${req('Full name')}${inp(l, 'name')}</div><div>${req('Phone', normPhone(l.phone).length >= 8 || false)}${inp(l, 'phone', 'tel')}</div><div>${req('Email')}${inp(l, 'email', 'email')}</div>
+      <div>${req('Source')}<input value="${esc(l.source + (a.platform ? ' – ' + a.platform : ''))}" disabled></div><div>${req('Service / business type')}${sel(l, 'service', SERVICES)}</div><div>${req('Customer interested?', l.interested === 'Yes' || false)}${sel(l, 'interested', ['Yes', 'Not sure', 'No'])}</div>
+      <div>${req('Number of visas', !qmiss(l.req.visas) || false)}${inp(l, 'req.visas', 'number', 'min="0" max="10"')}</div>
+      <div>${req('Jurisdiction', !qmiss(l.req.type) || false)}${sel(l, 'req.type', ['Free Zone', 'Mainland', 'Offshore'])}</div>
+      <div>${req(l.req.type === 'Free Zone' ? 'Free zone' : 'Authority', (has(l.req.zone) && zoneOf(l.req.zone).type === l.req.type) || false)}${sel(l, 'req.zone', zonesOfType.map(z => [z.id, z.name]))}</div>
+      <div>${req('Nationality', !qmiss(l.nationality) || false)}${sel(l, 'nationality', NATIONALITIES)}</div>
+      <div>${req('Exact business activity', !qmiss(l.req.activity) || false)}<input list="actList" value="${esc(l.req.activity || '')}" placeholder="e.g. General Trading" onchange="setL('${l.id}','req.activity',this.value)"><datalist id="actList">${ACTIVITIES.map(x => `<option>${x}</option>`).join('')}</datalist></div>
+      <div>${req('When to start')}${sel(l, 'start', ['Immediately', 'Within 1 month', '1–3 months', 'Just exploring'])}</div>
+      <div>${req('Budget (AED)')}${inp(l, 'budget', 'number')}</div><div>${req('Hot / Warm / Cold')}${sel(l, 'temp', ['Hot', 'Warm', 'Cold'], '—')}</div><div>${req('Estimated deal value')}<input value="${aed(l.value)}" disabled></div>
+    </div></div></div>
+
+    <div class="card" id="sec-fu"><div class="card-h"><h2>3 · Follow-up & appointment</h2><span class="small muted">Unlocks: Follow-up · Appointment Booked</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
+      <div>${req('Follow-up date & time', has(l.followUp) || undefined)}${inp(l, 'followUp', 'datetime-local')}</div>
+      <div>${req('Appointment date & time')}${inp(l, 'appt.at', 'datetime-local')}</div>
+      <div>${req('Meeting place')}${sel(l, 'appt.place', ['QPH Office, Dubai', 'Zoom / Google Meet', 'Client location'])}</div>
+    </div></div></div>
+
+    <div class="card"><div class="card-h"><h2>4 · Proposal</h2><span class="small muted">Unlocks: Proposal Sent — PDF required</span></div><div class="card-b">
+      ${l.proposals.map((p, i) => `<div class="qrow"><span>📄 <b>${esc(p.pdf || 'No PDF')}</b> · ${esc(zoneOf(p.zone).name)} · ${p.visas} visa(s) · ${fmtDate(p.at, false)} ${p.uploaded ? '<span class="tag">uploaded</span>' : '<span class="tag">generated</span>'}</span><span style="display:flex;gap:6px;align-items:center"><b>${p.total ? aed(p.total) : ''}</b><button class="btn btn-sm" onclick="viewProposal('${l.id}',${i})">View</button></span></div>`).join('') || '<div class="muted small">No proposal yet.</div>'}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm btn-primary" onclick="proposalFor('${l.id}')">🧮 Create with calculator</button><label class="btn btn-sm">⬆ Upload proposal PDF<input type="file" accept="application/pdf" hidden onchange="uploadPdf('${l.id}',this)"></label><span class="small muted">or send from WhatsApp after it's attached</span></div>
+    </div></div>
+
+    <div class="card"><div class="card-h"><h2>5 · Payment</h2><span class="small muted">Payment Received needs Accounts confirmation</span></div><div class="card-b">
+      <div class="small" style="font-weight:700;margin-bottom:6px">Payment link</div>
+      <div class="form" style="margin:0"><div>${req('Amount (AED)', (l.payLink && +l.payLink.amount > 0) || undefined)}${inp(l, 'payLink.amount', 'number')}</div><div>${req('Payment link', (l.payLink && has(l.payLink.url)) || undefined)}<div style="display:flex;gap:6px">${inp(l, 'payLink.url', 'url', 'placeholder="https://pay…"')}<button class="btn btn-sm" onclick="setL('${l.id}','payLink.url','https://pay.quickpathhorizon.com/${l.id}')">Generate</button></div></div></div>
+      <div class="small" style="font-weight:700;margin:16px 0 6px">Payment received</div>
+      ${pay.status === 'confirmed' ? `<div class="ai-box" style="background:var(--green-soft);border-color:#A8DDBC">✅ <b style="color:var(--green)">Confirmed by Accounts</b> · ${aed(pay.amount)} · ${esc(pay.mode)} · Ref <b class="mono">${esc(pay.ref)}</b> · ${fmtDate(pay.date, false)}<div class="small muted">Confirmed by ${esc(user(pay.confirmedBy).name)} · ${fmtDate(pay.confirmedAt)}</div></div>`
+      : `<div class="form" style="margin:0;grid-template-columns:repeat(4,1fr)"><div>${req('Amount received')}${inp(l, 'payment.amount', 'number', pay.status === 'pending' ? 'disabled' : '')}</div><div>${req('Mode')}${pay.status === 'pending' ? `<input value="${esc(pay.mode || '')}" disabled>` : sel(l, 'payment.mode', ['Bank transfer', 'Card (payment link)', 'Cash', 'Cheque'])}</div><div>${req('Reference / txn code', has(pay.ref) || false)}${inp(l, 'payment.ref', 'text', (pay.status === 'pending' ? 'disabled ' : '') + 'placeholder="e.g. FT2611…"')}</div><div>${req('Date')}${inp(l, 'payment.date', 'datetime-local', pay.status === 'pending' ? 'disabled' : '')}</div></div>
+      ${pay.status === 'pending' ? `<div class="dup-box" style="margin-top:10px;background:#FFF8EC;border-color:#F3D19C"><b style="color:var(--amber)">⏳ Awaiting Accounts confirmation</b><span class="small">Sent by ${esc(user(pay.by).name)} ${ago(pay.sentAt)}</span>${ME.role === 'admin' ? `<button class="btn btn-sm btn-primary" onclick="confirmPay('${l.id}')">✅ Confirm (Accounts)</button><button class="btn btn-sm btn-danger" onclick="rejectPay('${l.id}')">Reject</button>` : '<span class="small muted">Only Accounts (Admin) can confirm</span>'}</div>`
+      : `${pay.status === 'rejected' ? `<div class="small" style="color:var(--red);margin-top:8px">✕ Rejected by Accounts: ${esc(pay.rejectNote || '')}</div>` : ''}<button class="btn btn-sm btn-navy" style="margin-top:10px" onclick="sendPay('${l.id}')">Send to Accounts for confirmation</button>`}`}
+    </div></div>
+
     <div class="card notes"><div class="card-h"><h2>📝 Notes</h2><span class="small muted">Type in Hindi / Hinglish → Polish to English</span></div><div class="card-b">
       <textarea id="noteIn" placeholder="e.g. client ne bola 2 visa chahiye, kal call karna hai…"></textarea>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ai btn-sm" onclick="$('noteIn').value=polish($('noteIn').value);toast('✨ Polished by AI Agent')">✨ Polish to English</button><button class="btn btn-primary btn-sm" onclick="addNote('${l.id}')">Save note</button></div>
       ${[...l.notes].reverse().map((n, i) => `<div class="note"><div class="meta">${esc(user(n.by).name)} · ${fmtDate(n.at)} ${n.polished ? '<span class="ai">✨ AI polished</span>' : ''}</div><div>${esc(n.text)}</div>${!n.polished ? `<button class="btn btn-sm" style="margin-top:4px;padding:2px 8px" onclick="polishNote('${l.id}',${l.notes.length - 1 - i})">✨ Polish</button>` : ''}</div>`).join('') || '<div class="muted small" style="margin-top:10px">No notes yet</div>'}
     </div></div>
-    ${l.proposals.length || l.payment ? `<div class="card"><div class="card-h"><h2>💼 Proposals & payment</h2></div><div class="card-b">
-      ${l.proposals.map(p => `<div class="qrow"><span>${p.id} · ${esc(zoneOf(p.zone).name)} · ${p.visas} visa(s) · ${fmtDate(p.at, false)}</span><b>${aed(p.total)}</b></div>`).join('')}
-      ${l.payment ? `<div class="qrow" style="color:var(--green)"><span>✅ Payment ${esc(l.payment.mode)} · ${esc(l.payment.ref)} · ${fmtDate(l.payment.date, false)}</span><b>${aed(l.payment.amount)}</b></div>` : ''}
-    </div></div>` : ''}
     <div class="card"><div class="card-h"><h2>🕑 Timeline</h2></div><div class="card-b"><ul class="tl">${[...l.activity].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
-  </div>`;
+  </div>
+
+  <div class="lp-side">
+    <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:10px">Lead overview</h3>
+      <div class="ov"><span class="muted small">Current stage</span><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(l.stage)}</b>${l.temp === 'Hot' ? pill('🔥 Hot', 'p-hot') : pill(l.temp)}</div></div>
+      <div class="kv1">${[['Owner', user(l.owner).name], ['Source', l.source + (a.platform ? ' – ' + a.platform : '')], ['Campaign', a.campaign || '—'], ['Ad set', a.adset || '—'], ['Ad name', a.ad || '—'], ['Created', fmtDate(l.createdAt)], ['Last update', ago(l.updatedAt || l.createdAt)]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    </div></div>
+    ${nx && !isClosed ? `<div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:4px">Next: ${esc(nx)}</h3><div class="small muted" style="margin-bottom:8px">${nxCrit.filter(c => c[0]).length}/${nxCrit.length} criteria met</div><div class="bar" style="margin-bottom:10px"><i style="width:${nxCrit.length ? nxCrit.filter(c => c[0]).length / nxCrit.length * 100 : 100}%"></i></div><ul class="crit">${nxCrit.map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px" ${missing(l, nx).length ? 'disabled' : ''} onclick="tryStage('${l.id}','${nx}')">Move to ${esc(nx)} →</button></div></div>` : ''}
+    <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">Contact</h3><ul class="crit">
+      <li class="${ci >= 1 ? 'ok' : ''}">${ci >= 1 ? '✓' : '○'} Contacted</li><li class="${l.contact.wa ? 'ok' : ''}">${l.contact.wa ? '✓' : '○'} WhatsApp sent</li><li class="${l.contact.call ? 'ok' : ''}">${l.contact.call ? '✓' : '○'} Called</li><li class="${l.contact.email ? 'ok' : ''}">${l.contact.email ? '✓' : '○'} Email sent</li><li class="${l.notes.length ? 'ok' : ''}">${l.notes.length ? '✓' : '○'} ${l.notes.length} note${l.notes.length === 1 ? '' : 's'}</li>
+    </ul><a class="btn btn-wa btn-sm" style="width:100%;justify-content:center;margin-top:10px" onclick="openChat('${l.id}')">💬 Open WhatsApp chat</a></div></div>
+    <div class="card attr"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">📍 Source & tracking</h3><div class="kv1">${[['Platform', a.platform], ['Campaign', a.campaign], ['Ad set / group', a.adset], ['Ad name', a.ad], ['Form', a.form], ['Landing page', a.landing], ['utm_source', u.utm_source], ['utm_medium', u.utm_medium], ['utm_campaign', u.utm_campaign], ['utm_term', u.utm_term], ['utm_content', u.utm_content], ['Click ID', a.clickId]].map(([k, v]) => `<div><span>${k}</span><b class="${k.startsWith('utm') || k === 'Click ID' ? 'mono' : ''}">${esc(v || '—')}</b></div>`).join('')}</div>${(l.touches || []).length ? `<div class="small muted" style="margin-top:8px"><b>Merged touches:</b> ${l.touches.map(t => `${esc(t.source)} · ${esc(t.attr.campaign || '')}`).join(' · ')}</div>` : ''}</div></div>
+  </div></div></div>`;
 }
-function addNote(id) { const l = S.leads.find(x => x.id === id); const t = $('noteIn').value.trim(); if (!t) return toast('Write a note first'); const isP = POLISHED[t] === undefined && Object.values(POLISHED).includes(t) || /^[A-Z]/.test(t) && /[.!?]$/.test(t); l.notes.push({ by: ME.id, at: Date.now(), text: t, polished: isP }); log(l, 'Note added'); save(); render(); toast('Note saved'); }
+
+function uploadPdf(id, input) {
+  const f = input.files[0]; if (!f) return; if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) return toast('Please upload a PDF file');
+  const l = S.leads.find(x => x.id === id);
+  const done = data => { l.proposals.push({ id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: l.req.zone || S.zones[0].id, total: l.value, visas: +l.req.visas || 0, pdf: f.name, uploaded: true, data }); log(l, `Proposal PDF uploaded: ${f.name}`); save(); render(); toast('📄 PDF attached — Proposal Sent is unlocked'); };
+  if (f.size < 400e3) { const r = new FileReader(); r.onload = () => done(r.result); r.readAsDataURL(f); } else done(null);
+}
+function viewProposal(id, i) {
+  const l = S.leads.find(x => x.id === id); const p = l.proposals[i];
+  if (p.data) { const w = window.open(); w.document.write(`<iframe src="${p.data}" style="border:0;width:100%;height:100%"></iframe>`); return; }
+  if (p.uploaded) return toast('Demo: large PDFs are stored by name only (' + p.pdf + ')');
+  const keep = C; C = Object.assign({ leadId: id, type: zoneOf(p.zone).type, zone: p.zone, acts: 3, visas: p.visas, addons: ['medical'], disc: 0 }, p.snap || {}); printQuote(); C = keep;
+}
+function sendPay(id) {
+  const l = S.leads.find(x => x.id === id); const p = l.payment || {};
+  const m = [[+p.amount > 0, 'Amount received'], [has(p.mode), 'Payment mode'], [has(p.ref), 'Reference / transaction code'], [has(p.date), 'Payment date']].filter(c => !c[0]).map(c => c[1]);
+  if (m.length) return toast('Fill: ' + m.join(', '));
+  Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); save(); render(); toast('⏳ Sent to Accounts (Faisal) for confirmation');
+}
+function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✅ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); if (PIPE.indexOf(l.stage) < PIPE.indexOf('Payment Received')) { log(l, `Stage changed ${l.stage} → Payment Received`, 'system'); l.stage = 'Payment Received'; l.followUp = null; } save(); render(); toast('✅ Payment confirmed — lead moved to Payment Received'); }
+function rejectPay(id) { const n = prompt('Reason for rejecting (e.g. amount not received in bank)'); if (n === null) return; const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'rejected', rejectNote: n }); log(l, 'Payment rejected by Accounts: ' + n); save(); render(); }
+function addNote(id) { const l = S.leads.find(x => x.id === id); const t = $('noteIn').value.trim(); if (!t) return toast('Write a note first'); const isP = Object.values(POLISHED).includes(t) || (/^[A-Z]/.test(t) && /[.!?]$/.test(t)); l.notes.push({ by: ME.id, at: Date.now(), text: t, polished: isP }); log(l, 'Note added'); save(); render(); toast('Note saved'); }
 function polishNote(id, i) { const l = S.leads.find(x => x.id === id); l.notes[i].orig = l.notes[i].text; l.notes[i].text = polish(l.notes[i].text); l.notes[i].polished = true; log(l, 'Note polished to English by AI Agent', 'ai'); save(); render(); toast('✨ Note polished'); }
-function runAI(id) { const l = S.leads.find(x => x.id === id); toast('✨ AI Agent reading notes & chat…'); setTimeout(() => { l.ai = Object.assign(aiNext(l), { at: Date.now() }); log(l, 'AI next step generated', 'ai'); save(); render(); }, 700); }
+function runAI(id) { const l = S.leads.find(x => x.id === id); toast('✨ AI Agent reading notes & chat…'); setTimeout(() => { l.ai = Object.assign(aiNext(l), { at: Date.now() }); const nx = nextStage(l); if (nx && missing(l, nx).length) l.ai.next += ` To unlock "${nx}": ${missing(l, nx).join(', ')}.`; log(l, 'AI next step generated', 'ai'); save(); render(); }, 700); }
 function assign(id, uid) { const l = S.leads.find(x => x.id === id); l.owner = uid; log(l, 'Reassigned to ' + user(uid).name); save(); render(); toast('Assigned to ' + user(uid).name); }
-function delLead(id) { if (!confirm('Delete this lead permanently?')) return; S.leads = S.leads.filter(l => l.id !== id); save(); closeDrawer(); render(); toast('Lead deleted'); }
+function delLead(id) { if (!confirm('Delete this lead permanently?')) return; S.leads = S.leads.filter(l => l.id !== id); save(); drawer = null; render(); toast('Lead deleted'); }
 function tagModal(id) {
   const l = S.leads.find(x => x.id === id); const opts = ['Hot lead', 'Price asked', 'Interested', 'Family visa', 'Golden visa', 'Call back', 'VIP', 'Budget low', 'Docs ready', 'Not interested'];
-  modal(`<h2>Tags · ${esc(l.name)}</h2><div class="opts" style="margin-top:12px">${opts.map(t => `<label class="opt ${l.tags.includes(t) ? 'on' : ''}"><input type="checkbox" value="${t}" ${l.tags.includes(t) ? 'checked' : ''}> ${t} ${['Interested', 'Price asked', 'Hot lead'].includes(t) ? '<em>🤖 AI</em>' : ''}</label>`).join('')}</div><p class="small muted">🤖 tags switch on the AI Agent for this chat — it reads new WhatsApp messages and updates stage, Hot/Warm/Cold and follow-up date.</p><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveTags('${id}')">Save</button></div>`);
+  modal(`<h2>Tags · ${esc(l.name)}</h2><div class="opts" style="margin-top:12px">${opts.map(t => `<label class="opt ${l.tags.includes(t) ? 'on' : ''}"><input type="checkbox" value="${t}" ${l.tags.includes(t) ? 'checked' : ''}> ${t} ${['Interested', 'Price asked', 'Hot lead'].includes(t) ? '<em>🤖 AI</em>' : ''}</label>`).join('')}</div><p class="small muted">🤖 tags switch on the AI Agent for this chat — it reads new WhatsApp messages and updates Hot/Warm/Cold and follow-up date.</p><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveTags('${id}')">Save</button></div>`);
 }
 function saveTags(id) { const l = S.leads.find(x => x.id === id); const keep = l.tags.filter(t => ['Duplicate', 'Re-enquired'].includes(t)); l.tags = keep.concat([...document.querySelectorAll('#modalBody input:checked')].map(i => i.value)); log(l, 'Tags updated: ' + l.tags.join(', ')); save(); closeModal(); render(); }
-
-/* stage change with SOP rules */
-function stageModal(id) {
-  const l = S.leads.find(x => x.id === id);
-  modal(`<h2>Change stage</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div>
-  <div class="form"><div class="full"><label>New stage</label><select id="stSel" onchange="stageFields('${id}')">${STAGES.map(s => `<option ${s === l.stage ? 'selected' : ''}>${s}</option>`).join('')}</select></div><div class="full" id="stFields"></div></div>
-  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="applyStage('${id}')">Save stage</button></div>`);
-  stageFields(id);
-}
-function stageFields(id) {
-  const l = S.leads.find(x => x.id === id); const s = $('stSel').value; const z = zoneOf(l.req.zone); let h = '';
-  const dt = (lbl, idd, v) => `<div><label>${lbl}</label><input type="datetime-local" id="${idd}" value="${toInput(v)}"></div>`;
-  if (s === 'Contacted') h = `<label>How did you contact? (required)</label><div class="opts">${['WhatsApp sent', 'Called', 'Email sent'].map(c => `<label class="opt"><input type="checkbox" class="chan" value="${c}"> ${c}</label>`).join('')}</div>`;
-  if (s === 'Not Contacted') h = `<div class="form" style="margin:0"><div><label>Reason</label><select id="fReason">${NOT_CONTACTED_REASONS.map(r => `<option>${r}</option>`).join('')}</select></div>${dt('Retry at', 'fDate', Date.now() + 3 * H)}</div>`;
-  if (s === 'Follow-up') h = `<div class="form" style="margin:0">${dt('Follow-up date & time', 'fDate', l.followUp || Date.now() + D)}</div>`;
-  if (s === 'Appointment Booked') h = `<div class="form" style="margin:0">${dt('Meeting date & time', 'fDate', Date.now() + D)}<div><label>Place</label><select id="fPlace"><option>QPH Office, Dubai</option><option>Zoom / Google Meet</option><option>Client location</option></select></div></div>`;
-  if (s === 'Qualified') h = `<div class="form" style="margin:0"><div><label>Jurisdiction</label><select id="fType">${['Free Zone', 'Mainland', 'Offshore'].map(t => `<option ${l.req.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div><div><label>Zone</label><select id="fZone">${S.zones.map(x => `<option value="${x.id}" ${x.id === z.id ? 'selected' : ''}>${x.name}</option>`).join('')}</select></div><div><label>Activity</label><select id="fAct">${ACTIVITIES.map(a => `<option ${l.req.activity === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div><div><label>Visas</label><input type="number" id="fVisas" min="0" max="10" value="${l.req.visas}"></div><div class="full"><label>Nationality</label><select id="fNat">${NATIONALITIES.map(n => `<option ${l.nationality === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>`;
-  if (s === 'Proposal Sent') h = l.proposals.length ? `<div class="ai-box">✅ Proposal ${l.proposals[l.proposals.length - 1].id} (${aed(l.proposals[l.proposals.length - 1].total)}) found on this lead.</div>` : `<div class="dup-box"><b>A proposal is required first.</b><button class="btn btn-sm btn-primary" onclick="closeModal();proposalFor('${id}')">🧮 Create proposal</button></div>`;
-  if (s === 'Payment Link Sent') h = `<div class="form" style="margin:0"><div><label>Amount (AED)</label><input type="number" id="fAmt" value="${l.value}"></div><div><label>Payment link</label><input id="fLink" value="https://pay.quickpathhorizon.com/${l.id}"></div></div>`;
-  if (s === 'Payment Received') h = `<div class="form" style="margin:0"><div><label>Amount (AED)</label><input type="number" id="fAmt" value="${l.value}"></div><div><label>Mode</label><select id="fMode"><option>Bank transfer</option><option>Card (payment link)</option><option>Cash</option><option>Cheque</option></select></div><div><label>Reference</label><input id="fRef" placeholder="Txn / receipt no."></div><div><label>Date</label><input type="date" id="fPDate" value="${new Date().toISOString().slice(0, 10)}"></div></div>`;
-  if (s === 'Closed Won') h = l.payment ? `<div class="ai-box">✅ Payment ${aed(l.payment.amount)} received. Closing will <b>open an Operations case</b> and auto-assign it to the next operations executive.</div>` : `<div class="dup-box"><b>Payment Received is required before Closed Won.</b></div>`;
-  if (s === 'Lost' || s === 'Junk') h = `<label>Reason (required)</label><select id="fReason">${LOST_REASONS.map(r => `<option>${r}</option>`).join('')}</select>`;
-  $('stFields').innerHTML = h;
-}
-function applyStage(id) {
-  const l = S.leads.find(x => x.id === id); const s = $('stSel').value; const v = k => $(k) ? $(k).value : '';
-  if (s === l.stage) return closeModal();
-  if (s === 'Contacted') { const ch = [...document.querySelectorAll('.chan:checked')].map(c => c.value); if (!ch.length) return toast('Tick how you contacted the lead'); log(l, 'Contacted via ' + ch.join(', ')); }
-  if (s === 'Not Contacted') { l.reason = v('fReason'); l.followUp = new Date(v('fDate')).getTime(); }
-  if (s === 'Follow-up') { if (!v('fDate')) return toast('Pick a follow-up date'); l.followUp = new Date(v('fDate')).getTime(); }
-  if (s === 'Appointment Booked') { l.followUp = new Date(v('fDate')).getTime(); log(l, 'Appointment: ' + fmtDate(l.followUp) + ' at ' + v('fPlace')); }
-  if (s === 'Qualified') { l.req = { type: v('fType'), zone: v('fZone'), activity: v('fAct'), visas: +v('fVisas') }; l.nationality = v('fNat'); l.value = estimate({ zone: l.req.zone, visas: l.req.visas, acts: 3, addons: ['medical'] }).total; }
-  if (s === 'Proposal Sent' && !l.proposals.length) return toast('Create a proposal first');
-  if (s === 'Payment Link Sent') { log(l, 'Payment link sent: ' + aed(+v('fAmt'))); }
-  if (s === 'Payment Received') { if (!v('fRef')) return toast('Enter payment reference'); l.payment = { amount: +v('fAmt'), mode: v('fMode'), ref: v('fRef'), date: new Date(v('fPDate')).getTime() }; }
-  if (s === 'Closed Won') { if (!l.payment) return toast('Record Payment Received first'); openCaseFor(l); }
-  if (s === 'Lost' || s === 'Junk') { l.reason = v('fReason'); l.followUp = null; }
-  log(l, `Stage changed ${l.stage} → ${s}`); l.stage = s; save(); closeModal(); render(); toast('Stage → ' + s);
-}
 function openCaseFor(l) {
   if (S.cases.some(c => c.leadId === l.id)) return;
   const ops = TEAM.filter(t => t.role === 'ops'); const owner = ops[(S.rrOps++) % ops.length].id;
   const docs = {}; DOCS.forEach(d => docs[d] = false);
-  const c = { id: 'C' + (3001 + S.cases.length + Math.floor(Math.random() * 100)), leadId: l.id, company: l.name.split(' ')[0] + ' ' + (l.req.activity || 'Trading').split(' ')[0] + (l.req.type === 'Mainland' ? ' LLC' : ' FZ-LLC'), stage: OPS_STAGES[0], owner, docs, zone: l.req.zone, visas: l.req.visas, startedAt: Date.now(), licenceNo: '', licenceExpiry: null, visaHolders: [], log: [{ at: Date.now(), by: 'system', text: `Case opened from ${l.id} (Closed Won by ${user(l.owner).name}) · assigned to ${user(owner).name}` }] };
+  const c = { id: 'C' + (3001 + S.cases.length + Math.floor(Math.random() * 100)), leadId: l.id, company: l.name.split(' ')[0] + ' ' + (l.req.activity || 'Trading').split(' ')[0] + (l.req.type === 'Mainland' ? ' LLC' : ' FZ-LLC'), stage: OPS_STAGES[0], owner, docs, zone: l.req.zone, visas: +l.req.visas || 0, startedAt: Date.now(), licenceNo: '', licenceExpiry: null, visaHolders: [], log: [{ at: Date.now(), by: 'system', text: `Case opened from ${l.id} (Closed Won by ${user(l.owner).name}) · assigned to ${user(owner).name}` }] };
   S.cases.unshift(c); log(l, `Operations case ${c.id} opened → ${user(owner).name}`, 'system');
   setTimeout(() => toast(`🗂️ Operations case ${c.id} created → ${user(owner).name}`), 1200);
 }
-function editLead(id) {
-  const l = S.leads.find(x => x.id === id);
-  modal(`<h2>Edit lead</h2><div class="form">
-    <div><label>Name</label><input id="eName" value="${esc(l.name)}"></div><div><label>Phone</label><input id="ePhone" value="${esc(l.phone)}"></div>
-    <div><label>Email</label><input id="eEmail" value="${esc(l.email)}"></div><div><label>Nationality</label><select id="eNat">${NATIONALITIES.map(n => `<option ${l.nationality === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
-    <div><label>Service</label><select id="eSvc">${SERVICES.map(n => `<option ${l.service === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div><label>Hot / Warm / Cold</label><select id="eTemp">${['Hot', 'Warm', 'Cold'].map(n => `<option ${l.temp === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
-    <div><label>Follow-up</label><input type="datetime-local" id="eFu" value="${l.followUp ? toInput(l.followUp) : ''}"></div><div><label>Visas</label><input type="number" id="eVisas" value="${l.req.visas}"></div>
-  </div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveEdit('${id}')">Save</button></div>`);
-}
-function saveEdit(id) {
-  const l = S.leads.find(x => x.id === id); const v = k => $(k).value;
-  const dup = findDup(v('ePhone'), v('eEmail'), id);
-  Object.assign(l, { name: v('eName'), phone: v('ePhone'), email: v('eEmail'), nationality: v('eNat'), service: v('eSvc'), temp: v('eTemp'), followUp: v('eFu') ? new Date(v('eFu')).getTime() : l.followUp });
-  l.req.visas = +v('eVisas');
-  if (dup && dup.id !== l.dupOf && !l.dupOf) { l.dupOf = dup.id; l.tags.push('Duplicate'); toast('⚠ This phone/email already exists on ' + dup.id + ' — tagged Duplicate'); }
-  log(l, 'Lead details edited'); save(); closeModal(); render();
-}
-function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadId: id, type: l.req.type, zone: l.req.zone, acts: 3, visas: l.req.visas, addons: ['medical'], disc: 0 }; closeDrawer(); go('calculator'); }
+function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadId: id, type: l.req.type || 'Free Zone', zone: has(l.req.zone) ? l.req.zone : S.zones.find(z => z.type === (l.req.type || 'Free Zone')).id, acts: 3, visas: +l.req.visas || 1, addons: ['medical'], disc: 0 }; drawer = null; go('calculator'); }
 
 /* ---------------- add / simulate ---------------- */
 function addLeadModal() {
@@ -613,12 +693,12 @@ function vCalc() {
 function quoteText(e, l) { return `Hi ${l ? l.name.split(' ')[0] : ''}, here is your Quick Path Horizon setup estimate:\n\n${e.z.name} (${e.z.type})\n${e.rows.map(r => '• ' + r[0] + ': ' + aed(r[1])).join('\n')}\n• Service fee: ${aed(e.feeNet)} + VAT ${aed(e.vat)}\n\nTOTAL: ${aed(e.total)}\n\nValid for 7 days. Reply YES to proceed!`; }
 function saveProposal() {
   const l = S.leads.find(x => x.id === C.leadId); if (!l) return; const e = estimate(C);
-  const p = { id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: C.zone, total: e.total, visas: e.visas };
+  const pid = 'P' + (2100 + Math.floor(Math.random() * 900)); const p = { id: pid, at: Date.now(), zone: C.zone, total: e.total, visas: e.visas, pdf: 'QPH-Proposal-' + pid + '.pdf', snap: Object.assign({}, C) };
   l.proposals.push(p); l.value = e.total; l.req.zone = C.zone; l.req.type = C.type; l.req.visas = e.visas;
   log(l, `Proposal ${p.id} created · ${e.z.name} · ${aed(e.total)}`);
-  const before = STAGES.indexOf(l.stage) < STAGES.indexOf('Proposal Sent');
+  const before = PIPE.indexOf(l.stage) < PIPE.indexOf('Proposal Sent') && !missing(l, 'Proposal Sent').length;
   if (before) { log(l, `Stage changed ${l.stage} → Proposal Sent`); l.stage = 'Proposal Sent'; l.followUp = Date.now() + D; }
-  save(); render(); toast(`💾 Proposal ${p.id} saved to ${l.name}${before ? ' · stage → Proposal Sent' : ''}`);
+  save(); render(); toast(`💾 Proposal ${p.id} (PDF) saved to ${l.name}${before ? ' · stage → Proposal Sent' : missing(l, 'Proposal Sent').length ? ' · qualify the lead first to move to Proposal Sent' : ''}`);
 }
 function printQuote() {
   const e = estimate(C); const l = S.leads.find(x => x.id === C.leadId); const pa = $('printArea'); pa.hidden = false;
@@ -734,6 +814,7 @@ function alerts() {
   L.filter(l => l.dupOf).forEach(l => a.push(['🧬', `Duplicate: ${l.name} (${l.id}) matches ${l.dupOf}`, `openLead('${l.id}')`]));
   L.filter(l => l.stage === 'New' && now - l.createdAt > 2 * H).slice(0, 6).forEach(l => a.push(['⏳', `${l.name} untouched for ${ago(l.createdAt).replace(' ago', '')}`, `openLead('${l.id}')`]));
   L.filter(l => l.followUp && l.followUp < now && OPEN_STAGES.includes(l.stage)).slice(0, 6).forEach(l => a.push(['🔴', `Overdue follow-up: ${l.name}`, `openLead('${l.id}')`]));
+  if (ME.role === 'admin') S.leads.filter(l => l.payment && l.payment.status === 'pending').forEach(l => a.push(['💰', `Confirm payment ${aed(l.payment.amount)} · ref ${l.payment.ref} · ${l.name}`, `openLead('${l.id}')`]));
   L.filter(l => unread(l)).slice(0, 5).forEach(l => a.push(['💬', `Unread WhatsApp from ${l.name}`, `openChat('${l.id}')`]));
   if (ME.role !== 'sales') S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < now + 60 * D).forEach(c => a.push(['🔁', `Licence renewal: ${c.company} (${Math.round((c.licenceExpiry - now) / D)}d)`, `openCase('${c.id}')`]));
   return a;

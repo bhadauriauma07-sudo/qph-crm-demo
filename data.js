@@ -1,6 +1,6 @@
 /* QPH CRM demo — constants and seed data */
 const TEAM = [
-  { id: 'u1', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager', color: '#0E2A47' },
+  { id: 'u1', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager & Accounts', color: '#0E2A47' },
   { id: 'u2', name: 'Aisha Khan', role: 'sales', title: 'Sales Executive', color: '#E46E1B' },
   { id: 'u3', name: 'Rohan Verma', role: 'sales', title: 'Sales Executive', color: '#B5530F' },
   { id: 'u4', name: 'Sara Ali', role: 'ops', title: 'Operations Executive', color: '#2F6FB3' },
@@ -142,15 +142,25 @@ function buildSeed() {
       const off = [-1.5 * D, -3 * H, 1 * H, 3 * H, 1 * D, 2 * D, 4 * D][i % 7];
       lead.followUp = now + off;
     }
-    if (stage === 'Not Contacted') lead.reason = pick(NOT_CONTACTED_REASONS);
+    const QP = ['Qualified', 'Proposal Sent', 'Payment Link Sent', 'Payment Received', 'Closed Won'].includes(stage);
+    const contacted = !['New', 'Not Contacted'].includes(stage);
+    lead.contact = { wa: contacted && rnd() < 0.8, call: contacted, email: contacted && rnd() < 0.3 };
+    lead.interested = QP ? 'Yes' : contacted && rnd() < 0.5 ? 'Not sure' : '';
+    lead.start = QP ? pick(['Immediately', 'Within 1 month']) : '';
+    lead.appt = stage === 'Appointment Booked' ? { at: lead.followUp, place: 'QPH Office, Dubai' } : {};
+    lead.payLink = ['Payment Link Sent', 'Payment Received', 'Closed Won'].includes(stage) ? { amount: lead.value, url: 'https://pay.quickpathhorizon.com/' + lead.id } : null;
+    lead.ncReason = ''; lead.retryAt = null;
+    if (!QP) { if (!contacted || rnd() < 0.5) lead.req.activity = ''; if (!contacted) lead.req.zone = ''; }
+    if (stage === 'Not Contacted') { lead.ncReason = pick(NOT_CONTACTED_REASONS); lead.retryAt = lead.followUp; }
     if (stage === 'Lost' || stage === 'Junk') lead.reason = pick(LOST_REASONS);
-    if (['Payment Received', 'Closed Won'].includes(stage)) lead.payment = { amount: lead.value, mode: pick(['Bank transfer', 'Card (payment link)', 'Cash']), ref: 'QPH-' + (5000 + i), date: created + 3 * D };
+    if (['Payment Received', 'Closed Won'].includes(stage)) lead.payment = { amount: lead.value, mode: pick(['Bank transfer', 'Card (payment link)', 'Cash']), ref: 'FT26' + (115000 + i * 37), date: created + 3 * D, status: 'confirmed', by: lead.owner, sentAt: created + 3 * D, confirmedBy: 'u1', confirmedAt: created + 3 * D + 2 * H };
+    if (stage === 'Payment Link Sent' && i % 2 === 0) lead.payment = { amount: lead.value, mode: 'Bank transfer', ref: 'FT26' + (220000 + i * 41), date: now - 5 * H, status: 'pending', by: lead.owner, sentAt: now - 4 * H };
     if (stage !== 'New') {
       const n = HINGLISH_NOTES[i % HINGLISH_NOTES.length];
       lead.notes.push({ by: lead.owner, at: created + 2 * H, text: n, polished: false });
     }
     if (['Proposal Sent', 'Payment Link Sent', 'Payment Received', 'Closed Won'].includes(stage)) {
-      lead.proposals.push({ id: 'P' + (2000 + i), at: created + D, zone: zone.id, total: lead.value, visas: lead.req.visas });
+      lead.proposals.push({ id: 'P' + (2000 + i), at: created + D, zone: zone.id, total: lead.value, visas: lead.req.visas, pdf: 'QPH-Proposal-P' + (2000 + i) + '.pdf' });
     }
     lead.tags = [];
     if (lead.temp === 'Hot') lead.tags.push('Hot lead');
@@ -188,7 +198,7 @@ function buildSeed() {
     const phoneVariant = k % 2 ? o.phone.replace('+971', '00971') : o.phone.replace('+971', '0');
     const d = JSON.parse(JSON.stringify(o));
     Object.assign(d, { id: 'L' + (1101 + k), phone: phoneVariant, email: k === 3 ? o.email.toUpperCase() : o.email, source: src, stage: 'New', createdAt: now - (k + 1) * 5 * H, updatedAt: now - (k + 1) * 5 * H, notes: [], proposals: [], payment: null, followUp: null, reason: '',
-      tags: ['Duplicate'], dupOf: o.id, owner: o.owner,
+      tags: ['Duplicate'], dupOf: o.id, owner: o.owner, contact: {}, interested: '', appt: {}, payLink: null, ncReason: '', retryAt: null, start: '',
       attr: { platform: src === 'Google' ? 'Google Search' : src === 'Meta' ? 'Instagram' : 'Organic / Direct', campaign: camp, adset, ad, form: src === 'Website' ? 'Contact Us form' : src === 'Meta' ? 'QPH Visa Form' : 'Website enquiry form',
         utm: src === 'Google' ? { utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'qph_search_business_setup_dubai', utm_term: 'freezone license cost' } : src === 'Meta' ? { utm_source: 'instagram', utm_medium: 'paid_social', utm_campaign: 'qph_golden_family_visa_leads' } : { utm_source: '(direct)', utm_medium: '(none)' },
         clickId: src === 'Google' ? 'gclid=Cj0KCQdupEAAYASAA' : '', landing: '' },
