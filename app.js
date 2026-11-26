@@ -31,7 +31,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 16;
+const APP_V = 17;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -264,9 +264,9 @@ function render() {
   $('bellCount').textContent = (myNotifs().filter(n => !n.read).length + alerts().length) || '';
   const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, newleads: vLeads, contacted: vLeads, appointments: vAppointments, accounts: vAccounts, followups: vFollowups, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
   if (drawer && drawer.kind === 'lead') { $('pageTitle').textContent = 'Lead'; $('view').innerHTML = leadPage(); return; }
+  if (drawer && drawer.kind === 'case') { $('pageTitle').textContent = 'Customer'; $('view').innerHTML = casePage(); return; }
   $('view').innerHTML = V();
   if (route === 'whatsapp') { const m = document.querySelector('.wa-msgs'); if (m) m.scrollTop = m.scrollHeight; }
-  if (drawer && drawer.kind === 'case') renderDrawer();
 }
 
 /* ---------------- dashboards ---------------- */
@@ -527,8 +527,8 @@ function reasonModal(id, s) {
 
 /* ---------------- lead page (Digimac style) ---------------- */
 function openLead(id) { drawer = { kind: 'lead', id }; $('drawerBg').classList.remove('open'); render(); window.scrollTo(0, 0); }
-function openCase(id) { drawer = { kind: 'case', id }; $('drawerBg').classList.add('open'); renderDrawer(); }
-function closeDrawer() { const wasLead = drawer && drawer.kind === 'lead'; drawer = null; $('drawerBg').classList.remove('open'); if (wasLead && ME) render(); }
+function openCase(id) { drawer = { kind: 'case', id }; $('drawerBg').classList.remove('open'); closeModal(); render(); window.scrollTo(0, 0); }
+function closeDrawer() { const was = !!drawer; drawer = null; $('drawerBg').classList.remove('open'); if (was && ME) render(); }
 function renderDrawer() { if (drawer && drawer.kind === 'case') $('drawer').innerHTML = caseDrawer(); }
 function leadNavList() { return ['leads', 'newleads', 'contacted'].includes(route) ? filteredLeads() : sortLeads(visibleLeads().slice()); }
 function navLead(dir) { const L = leadNavList(); const i = L.findIndex(l => l.id === drawer.id); const n = L[i + dir]; if (n) { drawer.id = n.id; render(); window.scrollTo(0, 0); } }
@@ -794,7 +794,7 @@ function vCalc() {
       <div><label>Discount on service fee (%)</label><input type="number" min="0" max="100" value="${C.disc}" onchange="C.disc=+this.value;render()"></div>
       <div><label>QPH service fee</label><input value="${aed(S.serviceFee)}" disabled></div>
     </div></div></div>
-    <div><div class="card quote"><div class="quote-h"><small>${lead ? 'Proposal for ' + esc(lead.name) : 'Quick quote'} · ${esc(z.name)}</small><div class="total">${aed(e.total)}</div><small>${e.visas} visa(s) · ${C.acts} activit${C.acts > 1 ? 'ies' : 'y'} · ${esc(z.type)}</small></div><div class="card-b">
+    <div class="calc-side"><div class="card quote"><div class="quote-h"><small>${lead ? 'Proposal for ' + esc(lead.name) : 'Quick quote'} · ${esc(z.name)}</small><div class="total">${aed(e.total)}</div><small>${e.visas} visa(s) · ${C.acts} activit${C.acts > 1 ? 'ies' : 'y'} · ${esc(z.type)}</small></div><div class="card-b">
       ${e.rows.map(r => `<div class="qrow"><span>${esc(r[0])}</span><b>${aed(r[1])}</b></div>`).join('')}
       <div class="qrow sub"><span>Government & third-party fees</span><span>${aed(e.govt)}</span></div>
       <div class="qrow"><span>QPH service fee</span><b>${aed(e.fee)}</b></div>
@@ -852,23 +852,52 @@ function vOps() {
   return `<div class="toolbar"><div class="seg"><button class="${!opsMine ? 'on' : ''}" onclick="opsMine=false;render()">All cases</button><button class="${opsMine ? 'on' : ''}" onclick="opsMine=true;render()">${ME.role === 'ops' ? 'My cases' : 'Ops team'}</button></div>${msel('ops', 'stage', OPS_STAGES, 'Ops stages')}${msel('ops', 'owner', TEAM.filter(t => t.role === 'ops').map(t => [t.id, t.name]), 'Ops owners')}${anyF(opsFilter) ? `<button class="btn btn-sm" onclick="opsFilter={stage:[],owner:[]};render()">Clear filters</button>` : ''}<span class="count">${cs.length} cases · paid customers arrive here automatically</span></div>
   <div class="kanban">${OPS_STAGES.map((s, i) => { const arr = cs.filter(c => c.stage === s); return `<div class="kcol"><h3><span>${s}</span><span>${arr.length}</span></h3>${arr.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const dn = DOCS.filter(d => c.docs[d]).length; return `<div class="kcard" onclick="openCase('${c.id}')"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(c.company)}</b>${av(c.owner, 22)}</div><div class="sub">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)} · ${c.visas} visa</div><div class="sub">${dn}/${DOCS.length} docs</div><div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></div>`; }).join('')}</div>`; }).join('')}</div>`;
 }
-function caseDrawer() {
-  const c = S.cases.find(x => x.id === drawer.id); if (!c) { closeDrawer(); return ''; }
-  const l = S.leads.find(x => x.id === c.leadId) || { name: '', phone: '', attr: {} }; const si = OPS_STAGES.indexOf(c.stage); const z = zoneOf(c.zone);
-  const canEdit = ME.role !== 'sales';
-  return `<div class="dr-h"><div class="top">${av(c.owner, 36)}<div><h2>${esc(c.company)}</h2><div class="small muted">${c.id} · ${esc(l.name)} · ${esc(l.phone)} · ${esc(z.name)}</div></div><button class="icon-btn x" onclick="closeDrawer()">✕</button></div>
-  <div style="margin-top:10px" class="stepper">${OPS_STAGES.map((s, i) => `<button class="${i < si ? 'done' : i === si ? 'cur' : ''}" ${canEdit ? `onclick="setOps('${c.id}',${i})"` : 'disabled'}>${i < si ? '✓ ' : ''}${s}</button>`).join('')}</div>
-  <div class="dr-actions"><a class="btn btn-wa btn-sm" target="_blank" href="${waLink(l.phone, WA_TEMPLATES[4].text.replace('{name}', l.name.split(' ')[0]))}">💬 Request documents</a>${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="opsAssign('${c.id}',this.value)">${TEAM.filter(t => t.role === 'ops').map(t => `<option value="${t.id}" ${c.owner === t.id ? 'selected' : ''}>Ops: ${t.name}</option>`).join('')}</select>` : ''}${l.id ? `<button class="btn btn-sm" onclick="openLead('${l.id}')">Sales lead ${l.id}</button>` : ''}</div></div>
-  <div class="dr-b">
-    <div class="card"><div class="card-h"><h2>Documents</h2><span class="small muted">${DOCS.filter(d => c.docs[d]).length}/${DOCS.length} · required to pass "Documents Collected"</span></div><div class="card-b checks">${DOCS.map(d => `<div class="check ${c.docs[d] ? 'done' : ''}" ${canEdit ? `onclick="toggleDoc('${c.id}','${d}')"` : ''}>${c.docs[d] ? '✓' : '○'} ${d}</div>`).join('')}</div></div>
-    <div class="card"><div class="card-h"><h2>Licence & visas</h2></div><div class="card-b"><div class="form" style="margin:0">
-      <div><label>Trade licence no.</label><input value="${esc(c.licenceNo)}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceNo',this.value)"></div>
+function caseDrawer() { return ''; }
+function casePage() {
+  const c = S.cases.find(x => x.id === drawer.id); if (!c) { drawer = null; return ''; }
+  const l = S.leads.find(x => x.id === c.leadId) || { name: '', phone: '', email: '', attr: {}, req: {}, proposals: [] }; const si = OPS_STAGES.indexOf(c.stage); const z = zoneOf(c.zone);
+  const canEdit = ME.role !== 'sales'; const p = l.payment || {}; const checks = acctChecks(c); const pend = checks.filter(x => !x[0]); const done = acctComplete(c) && c.stage === 'Setup Completed';
+  const vis = +c.visas || 0; const st = c.visaHolders.filter(v => v.status === 'Stamped').length;
+  const kv = rows => `<div class="kv three">${rows.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
+  return `<div class="lp">
+  <a class="back" onclick="closeDrawer()">← Back</a>
+  <div class="lp-h">
+    <div class="lp-av" style="background:${user(c.owner).color}">${initials(c.company)}</div>
+    <div style="flex:1;min-width:0"><h2>${esc(c.company)}</h2><div class="lp-meta">${c.id} · ${esc(l.name)} · 📱 ${esc(l.phone)}${l.email ? ' · ✉ ' + esc(l.email) : ''}</div></div>
+    <button class="icon-btn" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="dr-actions">
+    <a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, WA_TEMPLATES[4].text.replace('{name}', (l.name || '').split(' ')[0]))}">${'💬'} Request documents</a>
+    <a class="btn btn-sm" href="tel:${esc(l.phone)}">📞 Call</a>
+    ${l.id && l.email ? `<button class="btn btn-sm" onclick="composeEmail('${l.id}')">✉ Email</button>` : ''}
+    ${c.licenceExpiry ? `<button class="btn btn-sm" onclick="renew('${c.id}')">Renew licence +1 year</button>` : ''}
+    ${l.id ? `<button class="btn btn-sm" onclick="openLead('${l.id}')">Sales lead ${l.id}</button>` : ''}
+    <span style="flex:1"></span>
+    ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="opsAssign('${c.id}',this.value)">${TEAM.filter(t => t.role === 'ops').map(t => `<option value="${t.id}" ${c.owner === t.id ? 'selected' : ''}>Ops: ${t.name}</option>`).join('')}</select>` : ''}
+  </div>
+  <div class="pipe">${OPS_STAGES.map((s2, i) => `<button class="${i < si ? 'done' : ''} ${i === si ? 'cur' : ''}" ${canEdit ? `onclick="setOps('${c.id}',${i})"` : 'disabled'}>${i < si ? '✓ ' : ''}${s2}</button>`).join('')}</div>
+  ${done ? `<div class="pending ok"><b>✓ Account complete: licence, all visas and all documents done</b></div>` : `<div class="pending"><div><b>${pend.length ? pend.length + ' item' + (pend.length > 1 ? 's' : '') + ' pending before this client moves to Accounts' : 'All items done. Mark Setup Completed to move to Accounts.'}</b><div class="small muted">Stage ${si + 1} of ${OPS_STAGES.length} · ${esc(c.stage)}</div></div><div class="pend-chips">${pend.map(x => `<button onclick="document.getElementById('${x[1].startsWith('All documents') ? 'sec-docs' : 'sec-lic'}').scrollIntoView({behavior:'smooth',block:'center'})">${esc(x[1])} →</button>`).join('')}${!pend.length && canEdit ? `<button onclick="setOps('${c.id}',8)">Mark Setup Completed →</button>` : ''}</div></div>`}
+  <div class="lp-grid"><div class="lp-main">
+    <div class="card"><div class="card-h"><h2>1 · Client details</h2></div><div class="card-b">${kv([['Company', esc(c.company)], ['Client', esc(l.name || '-')], ['Phone', esc(l.phone || '-')], ['Email', esc(l.email || '-')], ['Nationality', esc(l.nationality || '-')], ['Business activity', esc((l.req || {}).activity || '-')], ['Jurisdiction', esc(z.type)], ['Free zone / authority', esc(z.name)], ['Visas in package', vis], ['Sold by', esc(user(l.owner).name)], ['Operations', esc(user(c.owner).name)], ['Case opened', fmtDate(c.startedAt)]])}</div></div>
+    <div class="card" id="sec-docs"><div class="card-h"><h2>2 · Documents</h2><span class="small muted">${DOCS.filter(d => c.docs[d]).length}/${DOCS.length} · required to pass "Documents Collected"</span></div><div class="card-b checks">${DOCS.map(d => `<div class="check ${c.docs[d] ? 'done' : ''}" ${canEdit ? `onclick="toggleDoc('${c.id}','${d}')"` : ''}>${c.docs[d] ? '✓' : '○'} ${d}</div>`).join('')}</div></div>
+    <div class="card" id="sec-lic"><div class="card-h"><h2>3 · Licence & visas</h2><span class="small muted">${vis ? `${st}/${vis} visas stamped` : 'No visas in package'}</span></div><div class="card-b"><div class="form" style="margin:0">
+      <div><label>Trade licence no.</label><input value="${esc(c.licenceNo)}" ${canEdit ? '' : 'disabled'} placeholder="Added when licence is issued" onchange="caseSet('${c.id}','licenceNo',this.value)"></div>
       <div><label>Licence expiry</label><input type="date" value="${c.licenceExpiry ? new Date(c.licenceExpiry).toISOString().slice(0, 10) : ''}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceExpiry',new Date(this.value).getTime())"></div>
-      <div><label>Jurisdiction</label><input value="${esc(z.name)} · ${esc(z.type)}" disabled></div><div><label>Visas in package</label><input value="${c.visas}" disabled></div></div>
-      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map(v => `<tr><td>${esc(v.name)}</td><td>${canEdit ? `<button class="btn btn-sm" onclick="toggleVisa('${c.id}',${c.visaHolders.indexOf(v)})">${v.status === 'Stamped' ? '✓ Stamped' : 'In process'}</button>` : pill(v.status, v.status === 'Stamped' ? 'p-closed-won' : 'p-follow-up')}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '-'}</td></tr>`).join('')}</tbody></table>` : ''}
+      <div><label>Jurisdiction</label><input value="${esc(z.name)} · ${esc(z.type)}" disabled></div><div><label>Visas in package</label><input value="${vis}" disabled></div></div>
+      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:14px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map((v, k) => `<tr><td>${esc(v.name)}</td><td>${canEdit ? `<button class="btn btn-sm" onclick="toggleVisa('${c.id}',${k})">${v.status === 'Stamped' ? '✓ Stamped' : 'In process'}</button>` : esc(v.status)}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '-'}</td></tr>`).join('')}</tbody></table>` : `<div class="small muted" style="margin-top:12px">Visa holders appear when the case reaches Visa Processing.</div>`}
     </div></div>
-    <div class="card"><div class="card-h"><h2>Case log</h2></div><div class="card-b"><ul class="tl">${[...c.log].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
-  </div>`;
+    <div class="card"><div class="card-h"><h2>4 · Payment & proposal</h2></div><div class="card-b">
+      ${kv([['Amount paid', p.amount ? aed(p.amount) : '-'], ['Mode', esc(p.mode || '-')], ['Reference', `<span class="mono">${esc(p.ref || '-')}</span>`], ['Payment date', p.date ? fmtDate(p.date, false) : '-'], ['Confirmed by', p.confirmedBy ? esc(user(p.confirmedBy).name) : '-'], ['Deal value', aed(l.value)]])}
+      ${(l.proposals || []).length ? `<div style="margin-top:12px">${l.proposals.map((pp, i) => `<div class="qrow"><span>${esc(pp.pdf || pp.id)} · ${esc(zoneOf(pp.zone).name)} · ${pp.visas} visa(s) · ${fmtDate(pp.at, false)}</span><span style="display:flex;gap:6px;align-items:center"><b>${pp.total ? aed(pp.total) : ''}</b><button class="btn btn-sm" onclick="viewProposal('${l.id}',${i})">View</button></span></div>`).join('')}</div>` : ''}
+    </div></div>
+  </div>
+  <div class="lp-side">
+    <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:10px">Customer overview</h3>
+      <div class="ov"><span class="muted small">Operations stage</span><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(c.stage)}</b>${done ? pill('Account complete', 'p-closed-won') : pill('In progress')}</div><div class="prog" style="margin-top:8px"><i style="width:${(si + 1) / OPS_STAGES.length * 100}%"></i></div></div>
+      <div class="kv1">${[['Operations', user(c.owner).name], ['Sold by', user(l.owner).name], ['Documents', DOCS.filter(d => c.docs[d]).length + '/' + DOCS.length], ['Visas stamped', vis ? st + '/' + vis : '-'], ['Licence no.', c.licenceNo || '-'], ['Licence expiry', c.licenceExpiry ? fmtDate(c.licenceExpiry, false) : '-'], ['Paid', p.amount ? aed(p.amount) : '-'], ['Source', (l.source || '-') + (l.attr && l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : '')]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    </div></div>
+    <div class="card hist"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">History</h3><ul class="tl">${[...c.log].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
+  </div></div></div>`;
 }
 function toggleDoc(id, d) { const c = S.cases.find(x => x.id === id); c.docs[d] = !c.docs[d]; c.log.push({ at: Date.now(), by: ME.id, text: `${d} ${c.docs[d] ? 'received' : 'marked missing'}` }); save(); render(); }
 function caseSet(id, k, v) { const c = S.cases.find(x => x.id === id); c[k] = v; c.log.push({ at: Date.now(), by: ME.id, text: `${k === 'licenceNo' ? 'Licence no.' : 'Licence expiry'} updated` }); save(); render(); }
