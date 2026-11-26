@@ -1,0 +1,745 @@
+/* QPH CRM demo — app */
+const KEY = 'qph_crm_demo_v1';
+let S = load();
+let ME = null;
+let route = 'dashboard';
+let period = '30';
+let drawer = null; // {kind:'lead'|'case', id}
+let leadFilter = { stage: '', source: '', campaign: '', owner: '', temp: '', dup: false };
+let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
+let waOpen = null;
+let setTab = 'team', campTab = 'campaign', opsMine = false;
+
+/* ---------------- utils ---------------- */
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.leads) return s; } catch (e) { } const s = buildSeed(); localStorage.setItem(KEY, JSON.stringify(s)); return s; }
+function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const aed = n => 'AED ' + Math.round(n || 0).toLocaleString('en-US');
+const H = 3600e3, D = 24 * H;
+const user = id => TEAM.find(t => t.id === id) || { name: id === 'system' ? 'System' : id === 'auto' ? 'Auto-reply' : id === 'ai' ? 'AI Agent' : '—', color: '#8A99A8' };
+const initials = n => n.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
+const av = (id, size = 28) => { const u = user(id); return `<span class="av" style="background:${u.color};width:${size}px;height:${size}px;font-size:${size / 2.4}px" title="${esc(u.name)}">${initials(u.name)}</span>`; };
+const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const pill = (t, cls) => `<span class="pill ${cls || 'p-' + slug(t)}">${esc(t)}</span>`;
+const zoneOf = id => S.zones.find(z => z.id === id) || S.zones[0];
+function fmtDate(ts, withTime = true) { if (!ts) return '—'; const d = new Date(ts); return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + (withTime ? ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''); }
+function ago(ts) { const m = Math.round((Date.now() - ts) / 60e3); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.round(m / 60); if (h < 24) return h + 'h ago'; return Math.round(h / 24) + 'd ago'; }
+function fu(ts) { if (!ts) return ''; const diff = ts - Date.now(); const today = new Date().toDateString() === new Date(ts).toDateString(); if (diff < 0) return `<span class="pill p-lost">Overdue · ${fmtDate(ts)}</span>`; if (today) return `<span class="pill p-follow-up">Today ${new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>`; return `<span class="pill">${fmtDate(ts)}</span>`; }
+function toInput(ts) { const d = new Date(ts || Date.now() + D); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+function toast(t) { const el = $('toast'); el.innerHTML = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 3200); }
+function normPhone(p) { const d = String(p || '').replace(/\D/g, ''); return d.slice(-9); }
+function findDup(phone, email, excludeId) {
+  const np = normPhone(phone), ne = String(email || '').trim().toLowerCase();
+  return S.leads.find(l => l.id !== excludeId && !l.dupOf && ((np.length >= 8 && normPhone(l.phone) === np) || (ne && l.email && l.email.toLowerCase() === ne)));
+}
+function dupsOf(id) { return S.leads.filter(l => l.dupOf === id); }
+function log(l, text, by) { l.activity.push({ at: Date.now(), by: by || ME.id, text }); l.updatedAt = Date.now(); }
+function inPeriod(ts) { if (period === 'all') return true; if (period === 'today') return new Date(ts).toDateString() === new Date().toDateString(); return ts >= Date.now() - (+period) * D; }
+function visibleLeads() { if (!ME) return []; if (ME.role === 'admin') return S.leads; if (ME.role === 'sales') return S.leads.filter(l => l.owner === ME.id); return []; }
+function visibleCases() { if (ME.role === 'ops' && opsMine) return S.cases.filter(c => c.owner === ME.id); return S.cases; }
+function unread(l) { const c = S.chats[l.id]; if (!c || !c.length) return 0; const r = S.read[l.id] || 0; return c.filter(m => m.from === 'in' && m.at > r).length; }
+function waLink(phone, text) { return 'https://wa.me/' + String(phone).replace(/\D/g, '').replace(/^00/, '').replace(/^0(?=5)/, '971') + '?text=' + encodeURIComponent(text || ''); }
+
+/* ---------------- AI (demo mode) ---------------- */
+const POLISHED = {
+  'client ne bola 2 visa chahiye, IFZA ya meydan dono ka rate bhejo. kal call karna hai 4 baje': 'Client needs 2 visas. Send rates for both IFZA and Meydan. Call back tomorrow at 4 PM.',
+  'call kiya, busy tha. bola sham ko whatsapp pe baat karenge': 'Called – client was busy. Will continue the conversation on WhatsApp this evening.',
+  'budget 15k tak hai, general trading activity, family visa bhi chahiye baad mein': 'Budget up to AED 15k, General Trading activity. Will also need a family visa later.',
+  'proposal bhej diya, partner se discuss karke batayega. friday tak follow up': 'Proposal sent. Client will discuss with partner and revert. Follow up by Friday.',
+  'office visit kiya aaj, documents ready hai, payment next week karega': 'Client visited the office today. Documents are ready; payment expected next week.',
+  'price zyada laga, shams ka option diya, soch ke batayega': 'Client found the price high. Offered SHAMS as a lower-cost option; will think and revert.',
+  'india se hai, abhi tourist visa pe dubai mein hai, jaldi setup chahiye': 'Client is from India, currently in Dubai on a tourist visa. Needs an urgent setup.',
+};
+const DICT = [[/client ne bola/gi, 'Client said'], [/call kiya/gi, 'Called'], [/call karna hai/gi, 'need to call'], [/bhej diya/gi, 'sent'], [/soch ke batayega/gi, 'will think and revert'], [/discuss karke batayega/gi, 'will discuss and revert'], [/zyada laga/gi, 'felt too high'], [/baat karenge/gi, 'will talk'], [/sham ko/gi, 'in the evening'], [/ke liye/gi, 'for'], [/\bchahiye\b/gi, 'needs'], [/\bbhejo\b/gi, 'send'], [/\bbola\b/gi, 'said'], [/\bkal\b/gi, 'tomorrow'], [/\baaj\b/gi, 'today'], [/\bbaje\b/gi, "o'clock"], [/\bdono\b/gi, 'both'], [/\bya\b/gi, 'or'], [/\bhai\b/gi, 'is'], [/\btha\b/gi, 'was'], [/\bnahi\b/gi, 'not'], [/\bhaan\b/gi, 'yes'], [/\baur\b/gi, 'and'], [/\bbhi\b/gi, 'also'], [/\bmein\b/gi, 'in'], [/\bpe\b/gi, 'on'], [/\bka\b/gi, 'of'], [/\bki\b/gi, 'of'], [/\bse\b/gi, 'from'], [/\babhi\b/gi, 'currently'], [/\bjaldi\b/gi, 'urgently'], [/\bkarega\b/gi, 'will do'], [/\bkarna\b/gi, 'to do'], [/\bpaise\b/gi, 'payment'], [/\btak\b/gi, 'by'], [/\bbaad mein\b/gi, 'later'], [/\bthoda\b/gi, 'a little'], [/\bmilna\b/gi, 'meet'], [/\bbatayega\b/gi, 'will confirm'], [/\bkoi\b/gi, 'any']];
+function polish(t) {
+  t = String(t || '').trim(); if (!t) return t;
+  if (POLISHED[t]) return POLISHED[t];
+  let o = t; DICT.forEach(([r, w]) => o = o.replace(r, w));
+  o = o.replace(/\s+/g, ' ').replace(/\s+([,.])/g, '$1');
+  o = o.split(/(?<=[.!?])\s+/).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  if (!/[.!?]$/.test(o)) o += '.';
+  return o;
+}
+function aiNext(l) {
+  const z = zoneOf(l.req.zone), first = l.name.split(' ')[0];
+  const est = estimate({ zone: z.id, visas: l.req.visas, acts: 3, addons: ['medical'], disc: 0 }).total;
+  const last = l.notes.length ? (l.notes[l.notes.length - 1].polished ? l.notes[l.notes.length - 1].text : polish(l.notes[l.notes.length - 1].text)) : '';
+  const tips = {
+    'New': `Call ${first} within 15 minutes (leads called in the first hour convert ~3x better). Send the WhatsApp welcome template, then confirm visas, activity and budget.`,
+    'Contacted': `Qualify ${first}: confirm ${l.req.visas} visa(s), activity "${l.req.activity}" and Free Zone vs Mainland. Book an office or Zoom appointment.`,
+    'Not Contacted': `Retry at a different time of day and send the follow-up WhatsApp template. After 3 failed attempts, move to Lost with reason "Not reachable".`,
+    'Follow-up': `Follow up as promised. Lead with value: share the 3 cheapest zones for "${l.req.activity}" from the calculator comparison.`,
+    'Appointment Booked': `Send a reminder 2 hours before the meeting with the office location pin. Prepare a proposal for ${z.name} in advance.`,
+    'Qualified': `Create a proposal for ${z.name} with ${l.req.visas} visa(s) — estimated ${aed(est)}. Also offer SHAMS / SPC as a budget option.`,
+    'Proposal Sent': `Follow up within 24h. Handle price objection with a payment split (licence now, visas next month). Quote valid 7 days creates urgency.`,
+    'Payment Link Sent': `Check if payment link opened. Call to help complete payment; offer bank transfer as alternative.`,
+    'Payment Received': `Move to Closed Won so Operations can open the case, and send the documents checklist template.`,
+    'Closed Won': `Hand-over done. Ask for a Google review and a referral in 7 days; upsell VAT / Corporate Tax registration and bank account.`,
+    'Lost': `Add to the 60-day re-engagement list with the new offer.`, 'Junk': `No action.`,
+  };
+  return { summary: last ? 'Last note: ' + last : 'No notes yet.', next: tips[l.stage] || '', temp: l.temp };
+}
+function aiReply(l) {
+  const c = S.chats[l.id] || []; const lastIn = [...c].reverse().find(m => m.from === 'in'); const t = (lastIn ? lastIn.text : '').toLowerCase();
+  const first = l.name.split(' ')[0]; const z = zoneOf(l.req.zone);
+  const est = estimate({ zone: z.id, visas: l.req.visas, acts: 3, addons: ['medical'], disc: 0 });
+  if (/price|cost|rate|kitna|charges|fee/.test(t)) return `Hi ${first}, for a ${z.name} licence with ${l.req.visas} visa(s) the all-inclusive estimate is ${aed(est.total)} (licence, establishment card, visas, medical & Emirates ID). Shall I send the detailed proposal?`;
+  if (/document|docs|papers/.test(t)) return WA_TEMPLATES[4].text.replace('{name}', first);
+  if (/time|days|how long|kitne din/.test(t)) return `Hi ${first}, the licence is usually issued in 3–5 working days after documents, and visas take around 2–3 weeks in total.`;
+  return `Hi ${first}, thanks for your message! I'd be happy to help with your ${l.req.type.toLowerCase()} setup. Are you available for a quick call today?`;
+}
+
+/* ---------------- calculator ---------------- */
+function estimate(c) {
+  const z = zoneOf(c.zone); const visas = Math.min(+c.visas || 0, z.maxVisas); const rows = [];
+  rows.push([`${z.name} licence & registration (${z.type})`, z.licence]);
+  const extra = Math.max(0, (+c.acts || 0) - z.inclActs);
+  if (extra && z.extraAct) rows.push([`Extra activities × ${extra}`, extra * z.extraAct]);
+  if (visas > 0) { rows.push(['Establishment / immigration card', z.estCard]); rows.push([`Visa allocation & processing × ${visas}`, visas * z.perVisa]); }
+  (c.addons || []).forEach(id => { const a = S.addons.find(x => x.id === id); if (!a) return; if (a.per === 'visa') { if (visas > 0) rows.push([`${a.name} × ${visas}`, a.price * visas]); } else rows.push([a.name, a.price]); });
+  const govt = rows.reduce((s, r) => s + r[1], 0);
+  const fee = S.serviceFee; const disc = Math.round(fee * (+c.disc || 0) / 100); const feeNet = fee - disc; const vat = Math.round(feeNet * 0.05);
+  return { z, visas, rows, govt, fee, disc, feeNet, vat, total: govt + feeNet + vat };
+}
+
+/* ---------------- lead ingest (Meta / Google / Website / manual) ---------------- */
+function nextId() { S.seq = (S.seq || 1200) + 1; return 'L' + S.seq; }
+function ingest(d) {
+  const dup = findDup(d.phone, d.email);
+  const sales = TEAM.filter(t => t.role === 'sales');
+  const owner = dup ? dup.owner : (d.owner || sales[(S.rr++) % sales.length].id);
+  const z = S.zones.find(x => x.type === (d.reqType || 'Free Zone')) || S.zones[0];
+  const l = { id: nextId(), name: d.name, phone: d.phone, email: d.email || '', nationality: d.nationality || '', source: d.source, stage: 'New', temp: 'Warm', owner, createdAt: Date.now(), updatedAt: Date.now(),
+    service: d.service || 'Free Zone Company', req: { type: d.reqType || 'Free Zone', zone: z.id, activity: d.activity || '', visas: +d.visas || 1 }, value: 0, followUp: null,
+    tags: [], notes: [], activity: [], proposals: [], dupOf: null, payment: null, reason: '', attr: d.attr || { platform: '', campaign: '', adset: '', ad: '', form: '', utm: {}, clickId: '', landing: '' } };
+  l.value = estimate({ zone: z.id, visas: l.req.visas, acts: 3, addons: [] }).total;
+  if (d.note) l.notes.push({ by: ME.id, at: Date.now(), text: d.note, polished: false });
+  l.activity.push({ at: Date.now(), by: 'system', text: `Lead created from ${d.source}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : ''}${l.attr.adset ? ' › ' + l.attr.adset : ''}${l.attr.ad ? ' › ' + l.attr.ad : ''}` });
+  if (dup) {
+    l.dupOf = dup.id; l.tags.push('Duplicate');
+    l.activity.push({ at: Date.now(), by: 'system', text: `⚠ Duplicate of ${dup.id} (${dup.name}) — matched on ${normPhone(dup.phone) === normPhone(d.phone) ? 'phone' : 'email'}. Assigned to same owner: ${user(owner).name}` });
+    dup.tags.includes('Re-enquired') || dup.tags.push('Re-enquired');
+    log(dup, `Re-enquired via ${d.source}${l.attr.campaign ? ' · ' + l.attr.campaign : ''} → duplicate ${l.id}`, 'system');
+  } else {
+    l.activity.push({ at: Date.now(), by: 'system', text: `Auto-assigned to ${user(owner).name} (round robin)` });
+  }
+  if (d.source === 'WhatsApp' || d.sendWelcome) { S.chats[l.id] = [{ from: 'in', text: d.firstMsg || 'Hi, I need information about business setup', at: Date.now() - 30e3 }, { from: 'out', text: WA_TEMPLATES[0].text.replace('{name}', l.name.split(' ')[0]), at: Date.now(), by: 'auto' }]; l.activity.push({ at: Date.now(), by: 'auto', text: 'WhatsApp auto-welcome sent' }); }
+  S.leads.unshift(l); save();
+  return { l, dup };
+}
+
+/* ---------------- boot / login ---------------- */
+function boot() {
+  const uid = sessionStorage.getItem('qph_uid');
+  ME = TEAM.find(t => t.id === uid) || null;
+  if (!ME) { $('login').hidden = false; $('app').hidden = true; $('loginUsers').innerHTML = TEAM.map(t => `<button class="login-user" onclick="login('${t.id}')">${av(t.id, 36)}<div><b>${esc(t.name)}</b><span class="muted small">${esc(t.title)}</span></div><span class="role pill ${t.role === 'admin' ? 'p-qualified' : t.role === 'sales' ? 'p-new' : 'p-contacted'}">${t.role === 'ops' ? 'Operations' : t.role === 'admin' ? 'Admin' : 'Sales'}</span></button>`).join(''); return; }
+  $('login').hidden = true; $('app').hidden = false;
+  $('me').innerHTML = `${av(ME.id, 32)}<div style="min-width:0"><b>${esc(ME.name)}</b><span>${esc(ME.title)}</span></div>`;
+  $('simBtn').hidden = ME.role === 'ops'; $('addLeadBtn').hidden = ME.role === 'ops';
+  route = (location.hash.slice(1) || 'dashboard'); if (!navItems().some(n => n.id === route)) route = 'dashboard';
+  render();
+}
+function login(id) { sessionStorage.setItem('qph_uid', id); location.hash = 'dashboard'; boot(); toast('Logged in as ' + user(id).name); }
+$('logoutBtn').onclick = () => { sessionStorage.removeItem('qph_uid'); closeDrawer(); boot(); };
+$('menuBtn').onclick = () => { $('side').classList.toggle('open'); $('scrim').classList.toggle('open'); };
+$('scrim').onclick = () => { $('side').classList.remove('open'); $('scrim').classList.remove('open'); };
+$('addLeadBtn').onclick = () => addLeadModal();
+$('simBtn').onclick = () => simModal();
+$('bellBtn').onclick = () => alertsModal();
+$('q').oninput = () => { if (route !== 'leads' && ME.role !== 'ops') go('leads'); else render(); };
+$('drawerBg').onclick = e => { if (e.target.id === 'drawerBg') closeDrawer(); };
+$('modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
+window.onhashchange = () => { const r = location.hash.slice(1); if (r && r !== route && navItems().some(n => n.id === r)) { route = r; render(); } };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
+
+function navItems() {
+  const L = visibleLeads();
+  const fuDue = L.filter(l => l.followUp && OPEN_STAGES.includes(l.stage) && l.followUp < Date.now() + (new Date().setHours(23, 59) - Date.now())).length;
+  const dups = L.filter(l => l.dupOf).length;
+  const unreadN = L.filter(l => unread(l) > 0).length;
+  const newN = L.filter(l => l.stage === 'New').length;
+  const renew = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 60 * D).length;
+  const items = {
+    admin: [['h', 'Overview'], ['dashboard', '📊', 'Dashboard'], ['campaigns', '🎯', 'Campaigns & UTM'], ['h', 'Sales'], ['leads', '👥', 'All Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['duplicates', '🧬', 'Duplicates', dups, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '🧮', 'Cost Calculator'], ['h', 'Operations'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed').length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '⚙️', 'Settings']],
+    sales: [['h', 'My work'], ['dashboard', '📊', 'My Dashboard'], ['leads', '👥', 'My Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['duplicates', '🧬', 'Duplicates', dups, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
+    ops: [['h', 'Operations'], ['dashboard', '📊', 'Ops Dashboard'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
+  }[ME.role];
+  return items.map(i => i[0] === 'h' ? { h: i[1] } : { id: i[0], ic: i[1], label: i[2], badge: i[3], cls: i[4] });
+}
+function go(r) { route = r; location.hash = r; $('side').classList.remove('open'); $('scrim').classList.remove('open'); render(); window.scrollTo(0, 0); }
+
+function render() {
+  const items = navItems();
+  $('nav').innerHTML = items.map(n => n.h ? `<div class="nav-h">${n.h}</div>` : `<a class="nav-i ${route === n.id ? 'on' : ''}" onclick="go('${n.id}')"><span class="ic">${n.ic}</span>${n.label}${n.badge ? `<span class="badge ${n.cls || ''}">${n.badge}</span>` : ''}</a>`).join('');
+  const cur = items.find(n => n.id === route); $('pageTitle').textContent = cur ? cur.label : '';
+  $('bellCount').textContent = alerts().length || '';
+  const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, followups: vFollowups, duplicates: vDuplicates, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
+  $('view').innerHTML = V();
+  if (route === 'whatsapp') { const m = document.querySelector('.wa-msgs'); if (m) m.scrollTop = m.scrollHeight; }
+  if (drawer) renderDrawer();
+}
+
+/* ---------------- dashboards ---------------- */
+function periodSeg() { return `<div class="seg">${[['today', 'Today'], ['7', '7 days'], ['30', '30 days'], ['all', 'All time']].map(([k, t]) => `<button class="${period === k ? 'on' : ''}" onclick="period='${k}';render()">${t}</button>`).join('')}</div>`; }
+function stat(label, val, sub, onclick, cls = '') { return `<button class="stat ${cls}" onclick="${onclick || ''}"><span>${label}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ''}</button>`; }
+function bars(rows, cls = '') { const max = Math.max(1, ...rows.map(r => r[1])); return `<div class="bars">${rows.map(r => `<div class="row"><span title="${esc(r[0])}">${esc(r[0])}</span><div class="bar ${cls}"><i style="width:${(r[1] / max * 100).toFixed(1)}%"></i></div><b>${r[2] ?? r[1]}</b></div>`).join('')}</div>`; }
+function funnel(L) { return bars(FUNNEL.map(st => { const idx = STAGES.indexOf(st); return [st, L.filter(l => { const i = STAGES.indexOf(l.stage); return st === 'New' ? true : (i >= idx && i <= 9); }).length]; })); }
+function countBy(arr, fn) { const m = {}; arr.forEach(x => { const k = fn(x); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }
+function leadLi(l, right) { return `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div><b>${esc(l.name)}</b> ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}<div class="small muted">${esc(l.source)}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + esc(l.attr.campaign) : ''}</div></div><div class="r">${right || pill(l.stage)}</div></li>`; }
+function filterGo(f) { leadFilter = Object.assign({ stage: '', source: '', campaign: '', owner: '', temp: '', dup: false }, f); go('leads'); }
+
+function vAdminDash() {
+  const L = S.leads.filter(l => inPeriod(l.createdAt));
+  const won = L.filter(l => l.stage === 'Closed Won');
+  const paid = S.leads.filter(l => l.payment && inPeriod(l.payment.date));
+  const rev = paid.reduce((s, l) => s + l.payment.amount, 0);
+  const spend = Object.values(S.adSpend).reduce((a, b) => a + b, 0) * (period === 'all' ? 1.4 : period === '30' ? 1 : period === '7' ? 0.25 : 0.04);
+  const paidLeads = L.filter(l => l.source === 'Meta' || l.source === 'Google').length;
+  const dups = L.filter(l => l.dupOf).length;
+  const fuDue = S.leads.filter(l => l.followUp && OPEN_STAGES.includes(l.stage) && l.followUp < Date.now() + 12 * H).length;
+  const pipe = S.leads.filter(l => ['Qualified', 'Proposal Sent', 'Payment Link Sent'].includes(l.stage)).reduce((s, l) => s + l.value, 0);
+  const notC = S.leads.filter(l => l.stage === 'Not Contacted' || (l.stage === 'New' && Date.now() - l.createdAt > 2 * H)).length;
+  const camps = countBy(L.filter(l => l.attr.campaign && l.attr.campaign !== '(none)'), l => l.attr.campaign).slice(0, 6);
+  const sales = TEAM.filter(t => t.role === 'sales'), ops = TEAM.filter(t => t.role === 'ops');
+  return `<div class="hello"><div><h2>Welcome back, ${esc(ME.name.split(' ')[0])} 👋</h2><div class="muted">Whole-company view · sales + operations</div></div>${periodSeg()}</div>
+  <div class="stats">
+    ${stat('Total leads', L.length, `${paidLeads} from paid ads`, "filterGo({})", 'hero')}
+    ${stat('Closed won', won.length, L.length ? Math.round(won.length / L.length * 100) + '% conversion' : '', "filterGo({stage:'Closed Won'})")}
+    ${stat('Payments received', aed(rev), paid.length + ' payments', "filterGo({stage:'Payment Received'})")}
+    ${stat('Ad spend · CPL', aed(spend), 'CPL ' + aed(paidLeads ? spend / paidLeads : 0), "go('campaigns')")}
+    ${stat('Duplicates caught', dups, 'auto-tagged', "go('duplicates')", dups ? 'warn' : '')}
+    ${stat('Follow-ups due', fuDue, 'overdue + next 12h', "go('followups')", fuDue ? 'warn' : '')}
+    ${stat('Pipeline value', aed(pipe), 'qualified → payment link', "filterGo({stage:'Proposal Sent'})")}
+    ${stat('Not contacted', notC, 'untouched > 2h', "filterGo({stage:'New'})", notC ? 'warn' : '')}
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><h2>Sales funnel</h2><span class="muted small">${L.length} leads</span></div><div class="card-b">${funnel(L)}</div></div>
+    <div class="card"><div class="card-h"><h2>Leads by source</h2></div><div class="card-b">${bars(countBy(L, l => l.source))}</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><h2>Top campaigns</h2><a class="btn btn-sm" onclick="go('campaigns')">Full UTM report →</a></div><div class="card-b">${camps.length ? bars(camps.map(([c, n]) => [c, n, n + ' · ' + L.filter(l => l.attr.campaign === c && l.stage === 'Closed Won').length + 'W']), 'navy') : '<div class="empty">No campaign leads in this period</div>'}</div></div>
+    <div class="card"><div class="card-h"><h2>Team performance</h2></div><div class="card-b tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th class="num">Leads</th><th class="num">Contacted</th><th class="num">Won</th><th class="num">Revenue</th></tr></thead><tbody>
+      ${sales.map(t => { const m = L.filter(l => l.owner === t.id); const c = m.filter(l => l.stage !== 'New').length; const w = m.filter(l => l.stage === 'Closed Won'); return `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 24)}<div><b>${esc(t.name)}</b><span class="sub">Sales</span></div></div></td><td class="num">${m.length}</td><td class="num">${m.length ? Math.round(c / m.length * 100) : 0}%</td><td class="num">${w.length}</td><td class="num">${aed(w.reduce((s, l) => s + (l.payment ? l.payment.amount : 0), 0))}</td></tr>`; }).join('')}
+      ${ops.map(t => { const m = S.cases.filter(c => c.owner === t.id); return `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 24)}<div><b>${esc(t.name)}</b><span class="sub">Operations</span></div></div></td><td class="num" colspan="2">${m.filter(c => c.stage !== 'Setup Completed').length} active cases</td><td class="num" colspan="2">${m.filter(c => c.stage === 'Setup Completed').length} completed</td></tr>`; }).join('')}
+    </tbody></table></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><h2>Latest leads</h2><a class="btn btn-sm" onclick="filterGo({})">View all</a></div><div class="card-b"><ul class="list-plain">${[...S.leads].sort((a, b) => b.createdAt - a.createdAt).slice(0, 7).map(l => leadLi(l, `<span class="small muted">${ago(l.createdAt)}</span><br>${pill(l.stage)}`)).join('')}</ul></div></div>
+    <div class="card"><div class="card-h"><h2>Operations snapshot</h2><a class="btn btn-sm" onclick="go('operations')">Board →</a></div><div class="card-b">${bars(OPS_STAGES.map(s => [s, S.cases.filter(c => c.stage === s).length]), 'navy')}</div></div>
+  </div>`;
+}
+
+function vSalesDash() {
+  const L = visibleLeads();
+  const now = Date.now(), eod = new Date().setHours(23, 59, 59);
+  const open = L.filter(l => OPEN_STAGES.includes(l.stage));
+  const overdue = open.filter(l => l.followUp && l.followUp < now).sort((a, b) => a.followUp - b.followUp);
+  const today = open.filter(l => l.followUp && l.followUp >= now && l.followUp <= eod).sort((a, b) => a.followUp - b.followUp);
+  const fresh = L.filter(l => l.stage === 'New').sort((a, b) => b.createdAt - a.createdAt);
+  const hot = open.filter(l => l.temp === 'Hot').length;
+  const pipe = L.filter(l => ['Qualified', 'Proposal Sent', 'Payment Link Sent'].includes(l.stage)).reduce((s, l) => s + l.value, 0);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const wonM = L.filter(l => l.stage === 'Closed Won' && l.payment && l.payment.date >= monthStart);
+  const target = 60000; const got = wonM.reduce((s, l) => s + l.payment.amount, 0);
+  const hr = new Date().getHours();
+  return `<div class="hello"><div><h2>Good ${hr < 12 ? 'morning' : hr < 17 ? 'afternoon' : 'evening'}, ${esc(ME.name.split(' ')[0])} ☀️</h2><div class="muted">Your leads only · clear Overdue first, then Today, then New</div></div></div>
+  <div class="stats">
+    ${stat('New to contact', fresh.length, 'contact same day', "filterGo({stage:'New'})", 'hero')}
+    ${stat('Overdue follow-ups', overdue.length, '', "go('followups')", overdue.length ? 'warn' : '')}
+    ${stat('Due today', today.length, '', "go('followups')")}
+    ${stat('Hot leads', hot, '', "filterGo({temp:'Hot'})")}
+    ${stat('My pipeline', aed(pipe), 'qualified → payment link', "filterGo({stage:'Proposal Sent'})")}
+    ${stat('Won this month', aed(got), `target ${aed(target)} · ${Math.round(got / target * 100)}%`, "filterGo({stage:'Closed Won'})")}
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><h2>⏰ Today's to-do</h2><a class="btn btn-sm" onclick="go('followups')">All follow-ups</a></div><div class="card-b">
+      ${overdue.length + today.length ? `<ul class="list-plain">${[...overdue, ...today].slice(0, 8).map(l => leadLi(l, fu(l.followUp))).join('')}</ul>` : '<div class="empty">🎉 Nothing due. Contact your new leads!</div>'}
+    </div></div>
+    <div class="card"><div class="card-h"><h2>🆕 New leads (call within 15 min)</h2></div><div class="card-b">
+      ${fresh.length ? `<ul class="list-plain">${fresh.slice(0, 8).map(l => leadLi(l, `<span class="small ${now - l.createdAt > 2 * H ? '' : 'muted'}" style="${now - l.createdAt > 2 * H ? 'color:var(--red);font-weight:700' : ''}">${ago(l.createdAt)}</span>`)).join('')}</ul>` : '<div class="empty">No new leads</div>'}
+    </div></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><div class="card-h"><h2>My funnel</h2></div><div class="card-b">${funnel(L)}</div></div>
+    <div class="card"><div class="card-h"><h2>My leads by source</h2></div><div class="card-b">${bars(countBy(L, l => l.source))}</div></div>
+    <div class="card"><div class="card-h"><h2>Monthly target</h2></div><div class="card-b"><div style="font-size:28px;font-weight:800">${aed(got)}</div><div class="muted small">of ${aed(target)}</div><div class="bar" style="height:14px;margin:12px 0"><i style="width:${Math.min(100, got / target * 100)}%"></i></div><div class="small muted">${wonM.length} deals closed this month · ${L.filter(l => l.dupOf).length} duplicate(s) to review</div></div></div>
+  </div>`;
+}
+
+function vOpsDash() {
+  const mine = S.cases.filter(c => c.owner === ME.id);
+  const active = mine.filter(c => c.stage !== 'Setup Completed');
+  const docsPending = active.filter(c => DOCS.some(d => !c.docs[d]));
+  const visasIP = mine.filter(c => c.stage === 'Visa Processing' || c.stage === 'Establishment Card').length;
+  const renew = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 60 * D).sort((a, b) => a.licenceExpiry - b.licenceExpiry);
+  const issued = mine.filter(c => OPS_STAGES.indexOf(c.stage) >= 4).length;
+  const caseLi = c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const i = OPS_STAGES.indexOf(c.stage); return `<li onclick="openCase('${c.id}')">${av(c.owner, 26)}<div><b>${esc(c.company)}</b><div class="small muted">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)}</div></div><div class="r">${pill(c.stage, i >= 8 ? 'p-closed-won' : i >= 4 ? 'p-qualified' : 'p-contacted')}</div></li>`; };
+  return `<div class="hello"><div><h2>Hello, ${esc(ME.name.split(' ')[0])} 🗂️</h2><div class="muted">Operations view · your cases, documents and renewals</div></div></div>
+  <div class="stats">
+    ${stat('My active cases', active.length, mine.length + ' total', "opsMine=true;go('operations')", 'hero')}
+    ${stat('Documents pending', docsPending.length, 'cannot pass Documents Collected', "opsMine=true;go('operations')", docsPending.length ? 'warn' : '')}
+    ${stat('Licences issued', issued, 'all time', "go('customers')")}
+    ${stat('Visas in process', visasIP, '', "opsMine=true;go('operations')")}
+    ${stat('Renewals ≤ 60 days', renew.length, 'licence expiry', "go('renewals')", renew.length ? 'warn' : '')}
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><h2>My active cases</h2><a class="btn btn-sm" onclick="opsMine=true;go('operations')">Board →</a></div><div class="card-b">${active.length ? `<ul class="list-plain">${active.slice(0, 8).map(caseLi).join('')}</ul>` : '<div class="empty">No active cases</div>'}</div></div>
+    <div class="card"><div class="card-h"><h2>Cases by stage (mine)</h2></div><div class="card-b">${bars(OPS_STAGES.map(s => [s, mine.filter(c => c.stage === s).length]), 'navy')}</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-h"><h2>📄 Missing documents</h2></div><div class="card-b">${docsPending.length ? `<ul class="list-plain">${docsPending.slice(0, 6).map(c => `<li onclick="openCase('${c.id}')"><div><b>${esc(c.company)}</b><div class="small muted">Missing: ${DOCS.filter(d => !c.docs[d]).join(', ')}</div></div></li>`).join('')}</ul>` : '<div class="empty">All documents complete ✅</div>'}</div></div>
+    <div class="card"><div class="card-h"><h2>🔁 Upcoming renewals</h2><a class="btn btn-sm" onclick="go('renewals')">All</a></div><div class="card-b">${renew.length ? `<ul class="list-plain">${renew.slice(0, 6).map(c => `<li onclick="openCase('${c.id}')"><div><b>${esc(c.company)}</b><div class="small muted">${esc(c.licenceNo)}</div></div><div class="r">${expiryPill(c.licenceExpiry)}</div></li>`).join('')}</ul>` : '<div class="empty">No renewals in next 60 days</div>'}</div></div>
+  </div>`;
+}
+function expiryPill(ts) { const d = Math.round((ts - Date.now()) / D); return d < 0 ? pill('Expired ' + -d + 'd ago', 'p-lost') : d <= 7 ? pill(d + ' days', 'p-lost') : d <= 30 ? pill(d + ' days', 'p-follow-up') : pill(d + ' days', 'p-new'); }
+
+/* ---------------- leads ---------------- */
+function filteredLeads() {
+  const q = $('q').value.trim().toLowerCase(); const f = leadFilter;
+  return visibleLeads().filter(l => (!f.stage || l.stage === f.stage) && (!f.source || l.source === f.source) && (!f.campaign || l.attr.campaign === f.campaign) && (!f.owner || l.owner === f.owner) && (!f.temp || l.temp === f.temp) && (!f.dup || l.dupOf || dupsOf(l.id).length)
+    && (!q || [l.name, l.phone, l.email, l.id, l.attr.campaign, l.attr.adset, l.attr.ad, ...(l.tags || [])].join(' ').toLowerCase().includes(q) || normPhone(q).length > 5 && normPhone(l.phone).includes(normPhone(q))))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+function setF(k, v) { leadFilter[k] = v; render(); }
+function vLeads() {
+  const L = filteredLeads(); const all = visibleLeads();
+  const camps = [...new Set(all.map(l => l.attr.campaign).filter(c => c && c !== '(none)'))];
+  const sel = (k, opts, label) => `<select onchange="setF('${k}',this.value)"><option value="">${label}</option>${opts.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${leadFilter[k] === v ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>`;
+  return `<div class="toolbar">
+    ${sel('stage', STAGES, 'All stages')}${sel('source', SOURCES, 'All sources')}${sel('campaign', camps, 'All campaigns')}
+    ${ME.role === 'admin' ? sel('owner', TEAM.filter(t => t.role === 'sales').map(t => [t.id, t.name]), 'All owners') : ''}${sel('temp', ['Hot', 'Warm', 'Cold'], 'Hot/Warm/Cold')}
+    <label class="btn btn-sm" style="cursor:pointer"><input type="checkbox" ${leadFilter.dup ? 'checked' : ''} onchange="setF('dup',this.checked)"> Duplicates only</label>
+    ${Object.values(leadFilter).some(Boolean) ? `<button class="btn btn-sm" onclick="filterGo({})">Clear</button>` : ''}
+    <span class="count">${L.length} of ${all.length} leads</span>
+    <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+  </div>
+  <div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Lead</th><th>Source · Campaign › Ad set › Ad</th><th>Stage</th><th>Temp</th>${ME.role === 'admin' ? '<th>Owner</th>' : ''}<th>Follow-up</th><th>Created</th></tr></thead><tbody>
+  ${L.map(l => `<tr class="click ${l.dupOf ? 'dup' : ''}" onclick="openLead('${l.id}')">
+    <td><b>${esc(l.name)}</b><span class="sub">${esc(l.phone)} · ${l.id}</span>${l.dupOf ? ' ' + pill('Duplicate of ' + l.dupOf, 'p-dup') : ''}${dupsOf(l.id).length ? ' ' + pill('Re-enquired ×' + dupsOf(l.id).length, 'p-follow-up') : ''}</td>
+    <td>${pill(l.source)} <span class="small">${esc(l.attr.platform || '')}</span><span class="sub">${esc(l.attr.campaign && l.attr.campaign !== '(none)' ? l.attr.campaign : '')}</span>${l.attr.adset ? `<span class="sub">› ${esc(l.attr.adset)} › ${esc(l.attr.ad)}</span>` : ''}</td>
+    <td>${pill(l.stage)}</td><td>${pill(l.temp)}</td>${ME.role === 'admin' ? `<td>${av(l.owner, 24)}</td>` : ''}<td>${OPEN_STAGES.includes(l.stage) ? fu(l.followUp) : ''}</td><td class="small muted">${ago(l.createdAt)}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">No leads match</div></td></tr>`}
+  </tbody></table></div>`;
+}
+function exportCSV() {
+  const L = filteredLeads();
+  const cols = ['id', 'name', 'phone', 'email', 'nationality', 'source', 'platform', 'campaign', 'adset', 'ad', 'form', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'click_id', 'landing_page', 'stage', 'temp', 'owner', 'duplicate_of', 'created'];
+  const rows = L.map(l => [l.id, l.name, l.phone, l.email, l.nationality, l.source, l.attr.platform, l.attr.campaign, l.attr.adset, l.attr.ad, l.attr.form, l.attr.utm.utm_source, l.attr.utm.utm_medium, l.attr.utm.utm_campaign, l.attr.utm.utm_term, l.attr.utm.utm_content, l.attr.clickId, l.attr.landing, l.stage, l.temp, user(l.owner).name, l.dupOf || '', new Date(l.createdAt).toISOString()]);
+  const csv = [cols, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'qph-leads.csv'; a.click();
+  toast('Exported ' + L.length + ' leads with UTM columns');
+}
+
+function vFollowups() {
+  const L = visibleLeads().filter(l => l.followUp && OPEN_STAGES.includes(l.stage));
+  const now = Date.now(), eod = new Date().setHours(23, 59, 59);
+  const grp = [['🔴 Overdue', L.filter(l => l.followUp < now)], ['🟠 Today', L.filter(l => l.followUp >= now && l.followUp <= eod)], ['🔵 Upcoming', L.filter(l => l.followUp > eod)]];
+  return grp.map(([t, arr]) => `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.sort((a, b) => a.followUp - b.followUp).map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.notes.length ? '· ' + esc((l.notes[l.notes.length - 1].text).slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><a class="btn btn-sm btn-wa" onclick="event.stopPropagation();openChat('${l.id}')">WhatsApp</a><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
+}
+
+/* ---------------- duplicates ---------------- */
+function vDuplicates() {
+  const dups = visibleLeads().filter(l => l.dupOf);
+  const rule = `<div class="card" style="margin-bottom:16px"><div class="card-b" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="font-size:28px">🧬</div><div style="flex:1;min-width:240px"><b>How duplicate check works</b><div class="small muted">Every incoming lead (Meta, Google, Website, WhatsApp, manual, CSV) is matched on <b>phone (last 9 digits — so +971, 00971 and 05… all match)</b> and <b>email (case-insensitive)</b>. A match is tagged <span class="pill p-dup">Duplicate</span>, linked to the original, assigned to the <b>same salesperson</b>, and the original gets a "Re-enquired" note with the new campaign. Ad spend is not double-counted.</div></div></div></div>`;
+  return rule + (dups.length ? `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>New enquiry (duplicate)</th><th>Original lead</th><th>Matched on</th><th>Owner</th><th></th></tr></thead><tbody>
+  ${dups.map(d => { const o = S.leads.find(x => x.id === d.dupOf) || {}; const on = normPhone(o.phone) === normPhone(d.phone) ? 'Phone' : 'Email'; return `<tr>
+    <td><b class="click" style="cursor:pointer" onclick="openLead('${d.id}')">${esc(d.name)} · ${d.id}</b><span class="sub">${esc(d.phone)} · ${ago(d.createdAt)}</span><span class="sub">${pill(d.source)} ${esc(d.attr.campaign || '')}${d.attr.adset ? ' › ' + esc(d.attr.adset) : ''}</span></td>
+    <td><b style="cursor:pointer" onclick="openLead('${o.id}')">${esc(o.name || '')} · ${o.id || ''}</b><span class="sub">${esc(o.phone || '')} · ${pill(o.stage || '')}</span><span class="sub">${pill(o.source || '')} ${esc((o.attr || {}).campaign || '')}</span></td>
+    <td>${pill(on, 'p-dup')}</td><td>${av(d.owner, 24)}</td>
+    <td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick="mergeDup('${d.id}')">Merge into original</button> <button class="btn btn-sm" onclick="notDup('${d.id}')">Not a duplicate</button></td></tr>`; }).join('')}
+  </tbody></table></div>` : '<div class="card"><div class="empty">No duplicates right now 🎉 — try ⚡ Simulate lead → "Make it a duplicate"</div></div>');
+}
+function mergeDup(id) {
+  const d = S.leads.find(l => l.id === id); const o = S.leads.find(l => l.id === d.dupOf); if (!o) return;
+  o.notes.push(...d.notes); o.activity.push(...d.activity);
+  o.touches = (o.touches || []).concat([{ at: d.createdAt, source: d.source, attr: d.attr }]);
+  log(o, `Merged duplicate ${d.id} (${d.source}${d.attr.campaign ? ' · ' + d.attr.campaign : ''}) into this lead`);
+  if (S.chats[d.id]) { S.chats[o.id] = (S.chats[o.id] || []).concat(S.chats[d.id]).sort((a, b) => a.at - b.at); delete S.chats[d.id]; }
+  S.leads = S.leads.filter(l => l.id !== id); save();
+  if (drawer && drawer.id === id) drawer.id = o.id;
+  render(); toast('✅ Merged into ' + o.id + ' — campaign touch kept in history');
+}
+function notDup(id) { const d = S.leads.find(l => l.id === id); log(d, `Marked NOT a duplicate of ${d.dupOf}`); d.dupOf = null; d.tags = d.tags.filter(t => t !== 'Duplicate'); save(); render(); toast('Duplicate tag removed'); }
+
+/* ---------------- lead drawer ---------------- */
+function openLead(id) { drawer = { kind: 'lead', id }; $('drawerBg').classList.add('open'); renderDrawer(); }
+function openCase(id) { drawer = { kind: 'case', id }; $('drawerBg').classList.add('open'); renderDrawer(); }
+function closeDrawer() { drawer = null; $('drawerBg').classList.remove('open'); }
+function renderDrawer() { if (!drawer) return; $('drawer').innerHTML = drawer.kind === 'lead' ? leadDrawer() : caseDrawer(); }
+function navLead(dir) { const L = route === 'leads' ? filteredLeads() : visibleLeads(); const i = L.findIndex(l => l.id === drawer.id); const n = L[i + dir]; if (n) { drawer.id = n.id; renderDrawer(); } }
+function leadDrawer() {
+  const l = S.leads.find(x => x.id === drawer.id); if (!l) { closeDrawer(); return ''; }
+  const o = l.dupOf ? S.leads.find(x => x.id === l.dupOf) : null; const kids = dupsOf(l.id);
+  const z = zoneOf(l.req.zone); const a = l.attr; const u = a.utm || {};
+  const canEdit = ME.role === 'admin' || l.owner === ME.id;
+  const ai = l.ai;
+  return `<div class="dr-h"><div class="top">${av(l.owner, 36)}<div><h2>${esc(l.name)}</h2><div class="small muted">${l.id} · ${esc(l.phone)} · ${esc(l.email)}</div></div>
+    <div class="x" style="display:flex;gap:4px"><button class="btn btn-sm" onclick="navLead(-1)" title="Previous lead">‹</button><button class="btn btn-sm" onclick="navLead(1)" title="Next lead">›</button><button class="icon-btn" onclick="closeDrawer()">✕</button></div></div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${pill(l.stage)} ${pill(l.temp)} ${pill(l.source)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')} <button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div>
+    <div class="dr-actions">
+      <button class="btn btn-navy btn-sm" onclick="stageModal('${l.id}')">Change stage ▾</button>
+      <button class="btn btn-wa btn-sm" onclick="openChat('${l.id}')">💬 WhatsApp</button>
+      <a class="btn btn-sm" href="tel:${esc(l.phone)}">📞 Call</a>
+      <button class="btn btn-sm" onclick="proposalFor('${l.id}')">🧮 Create proposal</button>
+      <button class="btn btn-ai btn-sm" onclick="runAI('${l.id}')">✨ AI next step</button>
+      ${canEdit ? `<button class="btn btn-sm" onclick="editLead('${l.id}')">✎ Edit</button>` : ''}
+      ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">Delete</button>` : ''}
+    </div></div>
+  <div class="dr-b">
+    ${o ? `<div class="dup-box"><div style="font-size:22px">⚠️</div><div style="flex:1;min-width:200px"><b>Duplicate lead</b><div class="small">Same ${normPhone(o.phone) === normPhone(l.phone) ? 'phone' : 'email'} as <a onclick="openLead('${o.id}')" style="cursor:pointer;font-weight:700">${o.id} · ${esc(o.name)}</a> (${esc(o.stage)}, first came from ${esc(o.source)} ${ago(o.createdAt)}).</div></div><button class="btn btn-sm btn-primary" onclick="mergeDup('${l.id}')">Merge into original</button><button class="btn btn-sm" onclick="notDup('${l.id}')">Not a duplicate</button></div>` : ''}
+    ${kids.length ? `<div class="dup-box" style="background:#FFF8EC;border-color:#F3D19C"><div style="font-size:22px">🔁</div><div style="flex:1"><b style="color:var(--amber)">Re-enquired ${kids.length}×</b><div class="small">${kids.map(k => `<a style="cursor:pointer" onclick="openLead('${k.id}')">${k.id}</a> via ${esc(k.source)} ${esc(k.attr.campaign || '')} (${ago(k.createdAt)})`).join('<br>')}</div></div></div>` : ''}
+    ${ai ? `<div class="ai-box"><b>✨ AI Agent</b> <span class="small muted">· ${fmtDate(ai.at)}</span><div style="margin-top:6px"><b style="color:var(--navy)">Summary:</b> ${esc(ai.summary)}</div><div style="margin-top:4px"><b style="color:var(--navy)">Next step:</b> ${esc(ai.next)}</div></div>` : ''}
+    <div class="card"><div class="card-h"><h2>Contact & requirement</h2></div><div class="card-b kv three">
+      <div><span>Phone</span><b>${esc(l.phone)}</b></div><div><span>Email</span><b>${esc(l.email || '—')}</b></div><div><span>Nationality</span><b>${esc(l.nationality || '—')}</b></div>
+      <div><span>Service</span><b>${esc(l.service)}</b></div><div><span>Jurisdiction</span><b>${esc(l.req.type)}</b></div><div><span>Zone</span><b>${esc(z.name)}</b></div>
+      <div><span>Activity</span><b>${esc(l.req.activity || '—')}</b></div><div><span>Visas</span><b>${l.req.visas}</b></div><div><span>Deal value</span><b>${aed(l.value)}</b></div>
+      <div><span>Follow-up</span><b>${l.followUp ? fmtDate(l.followUp) : '—'}</b></div><div><span>Owner</span><b>${esc(user(l.owner).name)}</b></div><div><span>${l.reason ? 'Reason' : 'Created'}</span><b>${esc(l.reason || fmtDate(l.createdAt))}</b></div>
+    </div></div>
+    <div class="card attr"><div class="card-h"><h2>📍 Lead source & tracking</h2><span class="pill ${l.source === 'Meta' ? 'p-meta' : l.source === 'Google' ? 'p-google' : 'p-' + slug(l.source)}">${esc(l.source)} ${a.platform ? '· ' + esc(a.platform) : ''}</span></div><div class="card-b">
+      <div class="kv three">
+        <div><span>Campaign name</span><b>${esc(a.campaign || '—')}</b></div><div><span>Ad set / Ad group</span><b>${esc(a.adset || '—')}</b></div><div><span>Ad name</span><b>${esc(a.ad || '—')}</b></div>
+        <div><span>Form / entry</span><b>${esc(a.form || '—')}</b></div><div><span>Landing page</span><b class="small">${esc(a.landing || '—')}</b></div><div><span>Click ID</span><b class="mono">${esc(a.clickId || '—')}</b></div>
+      </div>
+      <div style="margin-top:12px" class="kv three">${['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].map(k => `<div><span>${k}</span><b class="mono">${esc(u[k] || '—')}</b></div>`).join('')}</div>
+      ${(l.touches || []).length ? `<div class="small muted" style="margin-top:10px"><b>Other touches (merged):</b> ${l.touches.map(t => `${esc(t.source)} · ${esc(t.attr.campaign || '')} (${fmtDate(t.at, false)})`).join(' · ')}</div>` : ''}
+    </div></div>
+    <div class="card notes"><div class="card-h"><h2>📝 Notes</h2><span class="small muted">Type in Hindi / Hinglish → Polish to English</span></div><div class="card-b">
+      <textarea id="noteIn" placeholder="e.g. client ne bola 2 visa chahiye, kal call karna hai…"></textarea>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ai btn-sm" onclick="$('noteIn').value=polish($('noteIn').value);toast('✨ Polished by AI Agent')">✨ Polish to English</button><button class="btn btn-primary btn-sm" onclick="addNote('${l.id}')">Save note</button></div>
+      ${[...l.notes].reverse().map((n, i) => `<div class="note"><div class="meta">${esc(user(n.by).name)} · ${fmtDate(n.at)} ${n.polished ? '<span class="ai">✨ AI polished</span>' : ''}</div><div>${esc(n.text)}</div>${!n.polished ? `<button class="btn btn-sm" style="margin-top:4px;padding:2px 8px" onclick="polishNote('${l.id}',${l.notes.length - 1 - i})">✨ Polish</button>` : ''}</div>`).join('') || '<div class="muted small" style="margin-top:10px">No notes yet</div>'}
+    </div></div>
+    ${l.proposals.length || l.payment ? `<div class="card"><div class="card-h"><h2>💼 Proposals & payment</h2></div><div class="card-b">
+      ${l.proposals.map(p => `<div class="qrow"><span>${p.id} · ${esc(zoneOf(p.zone).name)} · ${p.visas} visa(s) · ${fmtDate(p.at, false)}</span><b>${aed(p.total)}</b></div>`).join('')}
+      ${l.payment ? `<div class="qrow" style="color:var(--green)"><span>✅ Payment ${esc(l.payment.mode)} · ${esc(l.payment.ref)} · ${fmtDate(l.payment.date, false)}</span><b>${aed(l.payment.amount)}</b></div>` : ''}
+    </div></div>` : ''}
+    <div class="card"><div class="card-h"><h2>🕑 Timeline</h2></div><div class="card-b"><ul class="tl">${[...l.activity].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
+  </div>`;
+}
+function addNote(id) { const l = S.leads.find(x => x.id === id); const t = $('noteIn').value.trim(); if (!t) return toast('Write a note first'); const isP = POLISHED[t] === undefined && Object.values(POLISHED).includes(t) || /^[A-Z]/.test(t) && /[.!?]$/.test(t); l.notes.push({ by: ME.id, at: Date.now(), text: t, polished: isP }); log(l, 'Note added'); save(); render(); toast('Note saved'); }
+function polishNote(id, i) { const l = S.leads.find(x => x.id === id); l.notes[i].orig = l.notes[i].text; l.notes[i].text = polish(l.notes[i].text); l.notes[i].polished = true; log(l, 'Note polished to English by AI Agent', 'ai'); save(); render(); toast('✨ Note polished'); }
+function runAI(id) { const l = S.leads.find(x => x.id === id); toast('✨ AI Agent reading notes & chat…'); setTimeout(() => { l.ai = Object.assign(aiNext(l), { at: Date.now() }); log(l, 'AI next step generated', 'ai'); save(); render(); }, 700); }
+function assign(id, uid) { const l = S.leads.find(x => x.id === id); l.owner = uid; log(l, 'Reassigned to ' + user(uid).name); save(); render(); toast('Assigned to ' + user(uid).name); }
+function delLead(id) { if (!confirm('Delete this lead permanently?')) return; S.leads = S.leads.filter(l => l.id !== id); save(); closeDrawer(); render(); toast('Lead deleted'); }
+function tagModal(id) {
+  const l = S.leads.find(x => x.id === id); const opts = ['Hot lead', 'Price asked', 'Interested', 'Family visa', 'Golden visa', 'Call back', 'VIP', 'Budget low', 'Docs ready', 'Not interested'];
+  modal(`<h2>Tags · ${esc(l.name)}</h2><div class="opts" style="margin-top:12px">${opts.map(t => `<label class="opt ${l.tags.includes(t) ? 'on' : ''}"><input type="checkbox" value="${t}" ${l.tags.includes(t) ? 'checked' : ''}> ${t} ${['Interested', 'Price asked', 'Hot lead'].includes(t) ? '<em>🤖 AI</em>' : ''}</label>`).join('')}</div><p class="small muted">🤖 tags switch on the AI Agent for this chat — it reads new WhatsApp messages and updates stage, Hot/Warm/Cold and follow-up date.</p><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveTags('${id}')">Save</button></div>`);
+}
+function saveTags(id) { const l = S.leads.find(x => x.id === id); const keep = l.tags.filter(t => ['Duplicate', 'Re-enquired'].includes(t)); l.tags = keep.concat([...document.querySelectorAll('#modalBody input:checked')].map(i => i.value)); log(l, 'Tags updated: ' + l.tags.join(', ')); save(); closeModal(); render(); }
+
+/* stage change with SOP rules */
+function stageModal(id) {
+  const l = S.leads.find(x => x.id === id);
+  modal(`<h2>Change stage</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div>
+  <div class="form"><div class="full"><label>New stage</label><select id="stSel" onchange="stageFields('${id}')">${STAGES.map(s => `<option ${s === l.stage ? 'selected' : ''}>${s}</option>`).join('')}</select></div><div class="full" id="stFields"></div></div>
+  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="applyStage('${id}')">Save stage</button></div>`);
+  stageFields(id);
+}
+function stageFields(id) {
+  const l = S.leads.find(x => x.id === id); const s = $('stSel').value; const z = zoneOf(l.req.zone); let h = '';
+  const dt = (lbl, idd, v) => `<div><label>${lbl}</label><input type="datetime-local" id="${idd}" value="${toInput(v)}"></div>`;
+  if (s === 'Contacted') h = `<label>How did you contact? (required)</label><div class="opts">${['WhatsApp sent', 'Called', 'Email sent'].map(c => `<label class="opt"><input type="checkbox" class="chan" value="${c}"> ${c}</label>`).join('')}</div>`;
+  if (s === 'Not Contacted') h = `<div class="form" style="margin:0"><div><label>Reason</label><select id="fReason">${NOT_CONTACTED_REASONS.map(r => `<option>${r}</option>`).join('')}</select></div>${dt('Retry at', 'fDate', Date.now() + 3 * H)}</div>`;
+  if (s === 'Follow-up') h = `<div class="form" style="margin:0">${dt('Follow-up date & time', 'fDate', l.followUp || Date.now() + D)}</div>`;
+  if (s === 'Appointment Booked') h = `<div class="form" style="margin:0">${dt('Meeting date & time', 'fDate', Date.now() + D)}<div><label>Place</label><select id="fPlace"><option>QPH Office, Dubai</option><option>Zoom / Google Meet</option><option>Client location</option></select></div></div>`;
+  if (s === 'Qualified') h = `<div class="form" style="margin:0"><div><label>Jurisdiction</label><select id="fType">${['Free Zone', 'Mainland', 'Offshore'].map(t => `<option ${l.req.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div><div><label>Zone</label><select id="fZone">${S.zones.map(x => `<option value="${x.id}" ${x.id === z.id ? 'selected' : ''}>${x.name}</option>`).join('')}</select></div><div><label>Activity</label><select id="fAct">${ACTIVITIES.map(a => `<option ${l.req.activity === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div><div><label>Visas</label><input type="number" id="fVisas" min="0" max="10" value="${l.req.visas}"></div><div class="full"><label>Nationality</label><select id="fNat">${NATIONALITIES.map(n => `<option ${l.nationality === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>`;
+  if (s === 'Proposal Sent') h = l.proposals.length ? `<div class="ai-box">✅ Proposal ${l.proposals[l.proposals.length - 1].id} (${aed(l.proposals[l.proposals.length - 1].total)}) found on this lead.</div>` : `<div class="dup-box"><b>A proposal is required first.</b><button class="btn btn-sm btn-primary" onclick="closeModal();proposalFor('${id}')">🧮 Create proposal</button></div>`;
+  if (s === 'Payment Link Sent') h = `<div class="form" style="margin:0"><div><label>Amount (AED)</label><input type="number" id="fAmt" value="${l.value}"></div><div><label>Payment link</label><input id="fLink" value="https://pay.quickpathhorizon.com/${l.id}"></div></div>`;
+  if (s === 'Payment Received') h = `<div class="form" style="margin:0"><div><label>Amount (AED)</label><input type="number" id="fAmt" value="${l.value}"></div><div><label>Mode</label><select id="fMode"><option>Bank transfer</option><option>Card (payment link)</option><option>Cash</option><option>Cheque</option></select></div><div><label>Reference</label><input id="fRef" placeholder="Txn / receipt no."></div><div><label>Date</label><input type="date" id="fPDate" value="${new Date().toISOString().slice(0, 10)}"></div></div>`;
+  if (s === 'Closed Won') h = l.payment ? `<div class="ai-box">✅ Payment ${aed(l.payment.amount)} received. Closing will <b>open an Operations case</b> and auto-assign it to the next operations executive.</div>` : `<div class="dup-box"><b>Payment Received is required before Closed Won.</b></div>`;
+  if (s === 'Lost' || s === 'Junk') h = `<label>Reason (required)</label><select id="fReason">${LOST_REASONS.map(r => `<option>${r}</option>`).join('')}</select>`;
+  $('stFields').innerHTML = h;
+}
+function applyStage(id) {
+  const l = S.leads.find(x => x.id === id); const s = $('stSel').value; const v = k => $(k) ? $(k).value : '';
+  if (s === l.stage) return closeModal();
+  if (s === 'Contacted') { const ch = [...document.querySelectorAll('.chan:checked')].map(c => c.value); if (!ch.length) return toast('Tick how you contacted the lead'); log(l, 'Contacted via ' + ch.join(', ')); }
+  if (s === 'Not Contacted') { l.reason = v('fReason'); l.followUp = new Date(v('fDate')).getTime(); }
+  if (s === 'Follow-up') { if (!v('fDate')) return toast('Pick a follow-up date'); l.followUp = new Date(v('fDate')).getTime(); }
+  if (s === 'Appointment Booked') { l.followUp = new Date(v('fDate')).getTime(); log(l, 'Appointment: ' + fmtDate(l.followUp) + ' at ' + v('fPlace')); }
+  if (s === 'Qualified') { l.req = { type: v('fType'), zone: v('fZone'), activity: v('fAct'), visas: +v('fVisas') }; l.nationality = v('fNat'); l.value = estimate({ zone: l.req.zone, visas: l.req.visas, acts: 3, addons: ['medical'] }).total; }
+  if (s === 'Proposal Sent' && !l.proposals.length) return toast('Create a proposal first');
+  if (s === 'Payment Link Sent') { log(l, 'Payment link sent: ' + aed(+v('fAmt'))); }
+  if (s === 'Payment Received') { if (!v('fRef')) return toast('Enter payment reference'); l.payment = { amount: +v('fAmt'), mode: v('fMode'), ref: v('fRef'), date: new Date(v('fPDate')).getTime() }; }
+  if (s === 'Closed Won') { if (!l.payment) return toast('Record Payment Received first'); openCaseFor(l); }
+  if (s === 'Lost' || s === 'Junk') { l.reason = v('fReason'); l.followUp = null; }
+  log(l, `Stage changed ${l.stage} → ${s}`); l.stage = s; save(); closeModal(); render(); toast('Stage → ' + s);
+}
+function openCaseFor(l) {
+  if (S.cases.some(c => c.leadId === l.id)) return;
+  const ops = TEAM.filter(t => t.role === 'ops'); const owner = ops[(S.rrOps++) % ops.length].id;
+  const docs = {}; DOCS.forEach(d => docs[d] = false);
+  const c = { id: 'C' + (3001 + S.cases.length + Math.floor(Math.random() * 100)), leadId: l.id, company: l.name.split(' ')[0] + ' ' + (l.req.activity || 'Trading').split(' ')[0] + (l.req.type === 'Mainland' ? ' LLC' : ' FZ-LLC'), stage: OPS_STAGES[0], owner, docs, zone: l.req.zone, visas: l.req.visas, startedAt: Date.now(), licenceNo: '', licenceExpiry: null, visaHolders: [], log: [{ at: Date.now(), by: 'system', text: `Case opened from ${l.id} (Closed Won by ${user(l.owner).name}) · assigned to ${user(owner).name}` }] };
+  S.cases.unshift(c); log(l, `Operations case ${c.id} opened → ${user(owner).name}`, 'system');
+  setTimeout(() => toast(`🗂️ Operations case ${c.id} created → ${user(owner).name}`), 1200);
+}
+function editLead(id) {
+  const l = S.leads.find(x => x.id === id);
+  modal(`<h2>Edit lead</h2><div class="form">
+    <div><label>Name</label><input id="eName" value="${esc(l.name)}"></div><div><label>Phone</label><input id="ePhone" value="${esc(l.phone)}"></div>
+    <div><label>Email</label><input id="eEmail" value="${esc(l.email)}"></div><div><label>Nationality</label><select id="eNat">${NATIONALITIES.map(n => `<option ${l.nationality === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+    <div><label>Service</label><select id="eSvc">${SERVICES.map(n => `<option ${l.service === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div><label>Hot / Warm / Cold</label><select id="eTemp">${['Hot', 'Warm', 'Cold'].map(n => `<option ${l.temp === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+    <div><label>Follow-up</label><input type="datetime-local" id="eFu" value="${l.followUp ? toInput(l.followUp) : ''}"></div><div><label>Visas</label><input type="number" id="eVisas" value="${l.req.visas}"></div>
+  </div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveEdit('${id}')">Save</button></div>`);
+}
+function saveEdit(id) {
+  const l = S.leads.find(x => x.id === id); const v = k => $(k).value;
+  const dup = findDup(v('ePhone'), v('eEmail'), id);
+  Object.assign(l, { name: v('eName'), phone: v('ePhone'), email: v('eEmail'), nationality: v('eNat'), service: v('eSvc'), temp: v('eTemp'), followUp: v('eFu') ? new Date(v('eFu')).getTime() : l.followUp });
+  l.req.visas = +v('eVisas');
+  if (dup && dup.id !== l.dupOf && !l.dupOf) { l.dupOf = dup.id; l.tags.push('Duplicate'); toast('⚠ This phone/email already exists on ' + dup.id + ' — tagged Duplicate'); }
+  log(l, 'Lead details edited'); save(); closeModal(); render();
+}
+function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadId: id, type: l.req.type, zone: l.req.zone, acts: 3, visas: l.req.visas, addons: ['medical'], disc: 0 }; closeDrawer(); go('calculator'); }
+
+/* ---------------- add / simulate ---------------- */
+function addLeadModal() {
+  modal(`<h2>+ Add lead</h2><div class="muted small">Walk-in, call or referral. Duplicate check runs as you type.</div><div class="form">
+    <div><label>Full name *</label><input id="nName"></div><div><label>Phone *</label><input id="nPhone" placeholder="+971 5x xxx xxxx" oninput="liveDup()"></div>
+    <div><label>Email</label><input id="nEmail" oninput="liveDup()"></div><div><label>Nationality</label><select id="nNat">${NATIONALITIES.map(n => `<option>${n}</option>`).join('')}</select></div>
+    <div><label>Source</label><select id="nSrc">${SOURCES.map(n => `<option ${n === 'Walk-in' ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div><label>Service</label><select id="nSvc">${SERVICES.map(n => `<option>${n}</option>`).join('')}</select></div>
+    <div><label>Campaign (optional)</label><input id="nCamp" placeholder="e.g. Referral – Ahmed"></div><div><label>Visas</label><input type="number" id="nVisas" value="1"></div>
+    <div class="full"><label>Note</label><textarea id="nNote" placeholder="Hinglish is fine — polish later"></textarea></div><div class="full" id="dupWarn"></div>
+  </div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveNew()">Create lead</button></div>`);
+}
+function liveDup() { const d = findDup($('nPhone').value, $('nEmail').value); $('dupWarn').innerHTML = d ? `<div class="dup-box"><b>⚠ Already in CRM:</b> <span>${d.id} · ${esc(d.name)} · ${esc(d.stage)} · owner ${esc(user(d.owner).name)}</span><span class="small muted">Saving will tag the new lead as Duplicate.</span></div>` : ''; }
+function saveNew() {
+  const v = k => $(k).value.trim(); if (!v('nName') || !v('nPhone')) return toast('Name and phone are required');
+  const { l, dup } = ingest({ name: v('nName'), phone: v('nPhone'), email: v('nEmail'), nationality: v('nNat'), source: v('nSrc'), service: v('nSvc'), visas: v('nVisas'), note: v('nNote'), owner: ME.role === 'sales' ? ME.id : '', attr: { platform: v('nSrc'), campaign: v('nCamp'), adset: '', ad: '', form: 'Manual entry', utm: {}, clickId: '', landing: '' } });
+  closeModal(); render(); openLead(l.id); toast(dup ? '⚠ Saved & tagged DUPLICATE of ' + dup.id : '✅ Lead created → ' + user(l.owner).name);
+}
+function simModal() {
+  modal(`<h2>⚡ Simulate incoming lead</h2><div class="muted small">Shows how a lead lands from Meta Lead Ads, Google Ads or the website with campaign, ad set, ad and UTM parameters — then gets duplicate-checked and auto-assigned.</div>
+  <div class="form">
+    <div><label>Source</label><select id="sSrc" onchange="simFill()"><option>Meta</option><option>Google</option><option>Website</option><option>WhatsApp</option></select></div>
+    <div><label>Campaign</label><select id="sCamp" onchange="simFill(true)"></select></div>
+    <div><label>Ad set / Ad group</label><select id="sAdset"></select></div><div><label>Ad name</label><select id="sAd"></select></div>
+    <div class="full" id="sUrlWrap"><label>Landing URL with UTM (website leads parse this automatically)</label><input id="sUrl"></div>
+    <div><label>Name</label><input id="sName"></div><div><label>Phone</label><input id="sPhone"></div>
+    <div class="full"><label class="opt" style="display:flex"><input type="checkbox" id="sDup" onchange="simDup()"> Make it a duplicate (re-use an existing lead's phone in a different format)</label></div>
+  </div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="simGo()">Send lead to CRM</button></div>`);
+  simFill();
+}
+function simFill(keepCamp) {
+  const src = $('sSrc').value; const list = CAMPAIGNS[src] || [];
+  if (!keepCamp) $('sCamp').innerHTML = list.length ? list.map((c, i) => `<option value="${i}">${esc(c.campaign)}</option>`).join('') : `<option value="-1">${src === 'WhatsApp' ? 'Click-to-WhatsApp – Freezone' : '(organic / direct)'}</option>`;
+  const c = list[+$('sCamp').value];
+  $('sAdset').innerHTML = c ? c.adsets.map(a => `<option>${esc(a)}</option>`).join('') : '<option value="">—</option>';
+  $('sAd').innerHTML = c ? c.ads.map(a => `<option>${esc(a)}</option>`).join('') : '<option value="">—</option>';
+  const s = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const base = 'https://quickpathhorizon.com/business-setup/';
+  $('sUrl').value = src === 'Meta' ? `${base}?utm_source=instagram&utm_medium=paid_social&utm_campaign=${s(c.campaign)}&utm_term=${s(c.adsets[0])}&utm_content=${s(c.ads[0])}&fbclid=IwAR${Math.random().toString(36).slice(2, 12)}`
+    : src === 'Google' ? `${base}?utm_source=google&utm_medium=cpc&utm_campaign=${s(c.campaign)}&utm_term=${encodeURIComponent(c.terms[0])}&utm_content=${s(c.ads[0])}&gclid=Cj0KCQ${Math.random().toString(36).slice(2, 12)}`
+      : src === 'Website' ? `https://quickpathhorizon.com/contact-us/?utm_source=chatgpt.com&utm_medium=referral` : '';
+  $('sUrlWrap').style.display = src === 'WhatsApp' ? 'none' : '';
+  if (!$('sName').value) { $('sName').value = FIRST[Math.floor(Math.random() * FIRST.length)] + ' ' + LAST[Math.floor(Math.random() * LAST.length)]; $('sPhone').value = '+9715' + Math.floor(10000000 + Math.random() * 89999999); }
+}
+function simDup() { if ($('sDup').checked) { const o = S.leads.filter(l => !l.dupOf)[Math.floor(Math.random() * 15)]; $('sName').value = o.name; $('sPhone').value = '0' + normPhone(o.phone).replace(/^(\d{2})(\d{3})/, '$1 $2 '); } }
+function simGo() {
+  const src = $('sSrc').value; const c = (CAMPAIGNS[src] || [])[+$('sCamp').value];
+  let utm = {}, clickId = '', landing = '';
+  try { const u = new URL($('sUrl').value); u.searchParams.forEach((v, k) => { if (k.startsWith('utm_')) utm[k] = v; if (k === 'gclid' || k === 'fbclid') clickId = k + '=' + v; }); landing = u.origin + u.pathname; } catch (e) { }
+  const attr = { platform: src === 'Meta' ? (utm.utm_source === 'facebook' ? 'Facebook' : 'Instagram') : src === 'Google' ? 'Google Search' : src === 'WhatsApp' ? 'WhatsApp +971 58 146 4678' : 'Organic / Referral',
+    campaign: c ? c.campaign : (src === 'WhatsApp' ? 'Click-to-WhatsApp – Freezone' : '(none)'), adset: $('sAdset').value, ad: $('sAd').value, form: src === 'Meta' ? (c.form || 'Instant form') : src === 'Google' ? 'Website enquiry form' : src === 'Website' ? 'Contact Us form' : '', utm, clickId, landing: src === 'Meta' && c.form !== 'Website (Pixel)' ? '(Instant form)' : landing };
+  const first = $('sName').value.split(' ')[0].toLowerCase();
+  const { l, dup } = ingest({ name: $('sName').value, phone: $('sPhone').value, email: dup0($('sPhone').value) || (first + Math.floor(Math.random() * 99) + '@gmail.com'), source: src, attr, visas: 1 + Math.floor(Math.random() * 3), activity: ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)], sendWelcome: true, firstMsg: src === 'WhatsApp' ? 'Hi, I saw your ad. What is the cost for freezone licence?' : `New ${src} lead — form submitted` });
+  closeModal(); render(); openLead(l.id);
+  toast(dup ? `⚠ ${src} lead flagged DUPLICATE of ${dup.id} → ${user(l.owner).name}` : `✅ New ${src} lead → ${user(l.owner).name} · WhatsApp welcome sent`);
+}
+function dup0(phone) { const d = findDup(phone, ''); return d ? d.email : ''; }
+
+/* ---------------- WhatsApp ---------------- */
+function openChat(id) { waOpen = id; closeDrawer(); if (!S.chats[id]) S.chats[id] = []; go('whatsapp'); }
+function vWhatsApp() {
+  const L = visibleLeads().filter(l => S.chats[l.id]).sort((a, b) => (last(b).at || 0) - (last(a).at || 0));
+  if (!waOpen || !L.find(l => l.id === waOpen)) waOpen = L[0] && L[0].id;
+  const l = S.leads.find(x => x.id === waOpen);
+  if (l) S.read[l.id] = Date.now();
+  const msgs = l ? S.chats[l.id] : [];
+  const lastIn = [...msgs].reverse().find(m => m.from === 'in');
+  const left = lastIn ? 24 * H - (Date.now() - lastIn.at) : -1;
+  setTimeout(save, 0);
+  return `<div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
+  <div class="wa-chat">${l ? `<div class="wa-ch">${av(l.owner, 34)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}</div></div><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, '')}">Open in WhatsApp ↗</a></div></div>
+    ${left > 0 ? `<div class="win24" style="background:var(--green-soft);color:var(--green)">🟢 24-hour window open · ${Math.floor(left / H)}h ${Math.floor(left % H / 60e3)}m left for free replies</div>` : `<div class="win24">⏱ 24-hour window closed — only Meta-approved templates can be sent</div>`}
+    <div class="wa-msgs">${msgs.map(m => `<div class="msg ${m.from}">${esc(m.text)}<span class="t">${m.from === 'out' ? esc(user(m.by).name) + ' · ' : ''}${fmtDate(m.at)} ${m.from === 'out' ? '<span style="color:#34B7F1">✓✓</span>' : ''}</span></div>`).join('') || '<div class="empty">No messages yet — send a template to start</div>'}</div>
+    <div class="wa-in"><select class="btn btn-sm" onchange="if(this.value){$('waIn').value=WA_TEMPLATES[this.value].text.replace('{name}','${esc(l.name.split(' ')[0])}');this.value=''}"><option value="">📋 Templates</option>${WA_TEMPLATES.map((t, i) => `<option value="${i}">${t.name}</option>`).join('')}</select>
+    <input id="waIn" placeholder="Type a message… (Hinglish ok → Polish)" onkeydown="if(event.key==='Enter')waSend('${l.id}')">
+    <button class="btn btn-sm btn-ai" onclick="$('waIn').value=aiReply(S.leads.find(x=>x.id==='${l.id}'));toast('✨ AI drafted a reply')">✨ AI reply</button>
+    <button class="btn btn-sm" onclick="$('waIn').value=polish($('waIn').value)">Polish</button>
+    <button class="btn btn-sm btn-wa" onclick="waSend('${l.id}')">Send ➤</button></div>` : '<div class="empty">Select a chat</div>'}</div></div>
+  <p class="small muted" style="margin-top:10px">Demo mode: messages are stored in the CRM only. Live version connects the WhatsApp Business Cloud API (Meta) — auto-welcome for new numbers, templates outside 24h, and the AI Agent on 🤖-tagged chats.</p>`;
+}
+function last(l) { const c = S.chats[l.id] || []; return c[c.length - 1] || {}; }
+function waSend(id) {
+  const t = $('waIn').value.trim(); if (!t) return; const l = S.leads.find(x => x.id === id);
+  S.chats[id].push({ from: 'out', text: t, at: Date.now(), by: ME.id });
+  if (l.stage === 'New') { log(l, 'Stage changed New → Contacted (WhatsApp reply)', 'system'); l.stage = 'Contacted'; }
+  log(l, 'WhatsApp message sent'); save(); render();
+  setTimeout(() => { const replies = ['Thank you! Please share the details.', 'Ok, can we talk tomorrow at 11?', 'Is the visa cost included in this?', 'Great, I will send my passport copy.']; S.chats[id].push({ from: 'in', text: replies[Math.floor(Math.random() * replies.length)], at: Date.now() }); save(); if (route === 'whatsapp') render(); }, 2500);
+}
+
+/* ---------------- calculator ---------------- */
+function vCalc() {
+  const e = estimate(C); const z = e.z; const lead = S.leads.find(l => l.id === C.leadId);
+  const zones = S.zones.filter(x => x.type === C.type);
+  const leads = visibleLeads().filter(l => !['Lost', 'Junk'].includes(l.stage));
+  const cmp = zones.map(x => ({ x, t: estimate(Object.assign({}, C, { zone: x.id })).total })).sort((a, b) => a.t - b.t);
+  return `<div class="calc"><div class="card"><div class="card-h"><h2>🧮 Business setup cost calculator</h2><span class="small muted">Indicative prices · edit in Settings</span></div><div class="card-b">
+    <div class="form" style="margin-top:0">
+      <div class="full"><label>Link to lead (fills proposal)</label><select onchange="C.leadId=this.value;const l=S.leads.find(x=>x.id===this.value);if(l){C.type=l.req.type;C.zone=l.req.zone;C.visas=l.req.visas}render()"><option value="">— No lead (quick quote) —</option>${leads.map(l => `<option value="${l.id}" ${l.id === C.leadId ? 'selected' : ''}>${esc(l.name)} · ${l.id} · ${esc(l.stage)}</option>`).join('')}</select></div>
+      <div class="full"><label>Jurisdiction</label><div class="seg">${['Free Zone', 'Mainland', 'Offshore'].map(t => `<button class="${C.type === t ? 'on' : ''}" onclick="C.type='${t}';C.zone=S.zones.find(z=>z.type==='${t}').id;render()">${t}</button>`).join('')}</div></div>
+      <div class="full"><label>${C.type === 'Free Zone' ? 'Free zone' : 'Authority'}</label><div class="zone-cards">${zones.map(x => `<button class="zc ${x.id === C.zone ? 'on' : ''}" onclick="C.zone='${x.id}';render()"><b>${esc(x.name)}</b><span>${esc(x.emirate)} · from ${aed(x.licence)}</span></button>`).join('')}</div></div>
+      <div><label>Business activities</label><input type="number" min="1" max="10" value="${C.acts}" onchange="C.acts=+this.value;render()"><span class="small muted">${z.inclActs} included</span></div>
+      <div><label>Visas ${z.maxVisas ? '(max ' + z.maxVisas + ')' : '(not available)'}</label><input type="number" min="0" max="${z.maxVisas}" value="${e.visas}" ${z.maxVisas ? '' : 'disabled'} onchange="C.visas=+this.value;render()"></div>
+      <div class="full"><label>Add-ons</label><div class="opts">${S.addons.map(a => `<label class="opt ${C.addons.includes(a.id) ? 'on' : ''}"><input type="checkbox" ${C.addons.includes(a.id) ? 'checked' : ''} onchange="C.addons=this.checked?[...C.addons,'${a.id}']:C.addons.filter(x=>x!=='${a.id}');render()"> ${esc(a.name)}<em>${aed(a.price)}${a.per === 'visa' ? '/visa' : ''}</em></label>`).join('')}</div></div>
+      <div><label>Discount on service fee (%)</label><input type="number" min="0" max="100" value="${C.disc}" onchange="C.disc=+this.value;render()"></div>
+      <div><label>QPH service fee</label><input value="${aed(S.serviceFee)}" disabled></div>
+    </div></div></div>
+    <div><div class="card quote"><div class="quote-h"><small>${lead ? 'Proposal for ' + esc(lead.name) : 'Quick quote'} · ${esc(z.name)}</small><div class="total">${aed(e.total)}</div><small>${e.visas} visa(s) · ${C.acts} activit${C.acts > 1 ? 'ies' : 'y'} · ${esc(z.type)}</small></div><div class="card-b">
+      ${e.rows.map(r => `<div class="qrow"><span>${esc(r[0])}</span><b>${aed(r[1])}</b></div>`).join('')}
+      <div class="qrow sub"><span>Government & third-party fees</span><span>${aed(e.govt)}</span></div>
+      <div class="qrow"><span>QPH service fee</span><b>${aed(e.fee)}</b></div>
+      ${e.disc ? `<div class="qrow" style="color:var(--green)"><span>Discount ${C.disc}%</span><b>− ${aed(e.disc)}</b></div>` : ''}
+      <div class="qrow sub"><span>VAT 5% on service fee</span><span>${aed(e.vat)}</span></div>
+      <div class="qrow sum"><span>Total</span><span>${aed(e.total)}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-primary" onclick="saveProposal()" ${lead ? '' : 'disabled title="Link a lead first"'}>💾 Save proposal to lead</button>
+        <button class="btn" onclick="printQuote()">🖨 Print / PDF</button>
+        <a class="btn btn-wa" target="_blank" href="${waLink(lead ? lead.phone : '', quoteText(e, lead))}">💬 Send on WhatsApp</a>
+      </div></div></div>
+    <div class="card" style="margin-top:16px"><div class="card-h"><h2>Compare ${C.type === 'Free Zone' ? 'free zones' : 'options'}</h2><span class="small muted">same visas & add-ons</span></div><div class="card-b">${bars(cmp.map(({ x, t }) => [x.name, t, aed(t)]))}</div></div></div>
+  </div><div id="printArea" hidden></div>`;
+}
+function quoteText(e, l) { return `Hi ${l ? l.name.split(' ')[0] : ''}, here is your Quick Path Horizon setup estimate:\n\n${e.z.name} (${e.z.type})\n${e.rows.map(r => '• ' + r[0] + ': ' + aed(r[1])).join('\n')}\n• Service fee: ${aed(e.feeNet)} + VAT ${aed(e.vat)}\n\nTOTAL: ${aed(e.total)}\n\nValid for 7 days. Reply YES to proceed!`; }
+function saveProposal() {
+  const l = S.leads.find(x => x.id === C.leadId); if (!l) return; const e = estimate(C);
+  const p = { id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: C.zone, total: e.total, visas: e.visas };
+  l.proposals.push(p); l.value = e.total; l.req.zone = C.zone; l.req.type = C.type; l.req.visas = e.visas;
+  log(l, `Proposal ${p.id} created · ${e.z.name} · ${aed(e.total)}`);
+  const before = STAGES.indexOf(l.stage) < STAGES.indexOf('Proposal Sent');
+  if (before) { log(l, `Stage changed ${l.stage} → Proposal Sent`); l.stage = 'Proposal Sent'; l.followUp = Date.now() + D; }
+  save(); render(); toast(`💾 Proposal ${p.id} saved to ${l.name}${before ? ' · stage → Proposal Sent' : ''}`);
+}
+function printQuote() {
+  const e = estimate(C); const l = S.leads.find(x => x.id === C.leadId); const pa = $('printArea'); pa.hidden = false;
+  pa.innerHTML = `<div style="padding:40px;font-family:'Libre Franklin',sans-serif;color:#0E2A47"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #E46E1B;padding-bottom:16px"><img src="logo.png" style="height:56px"><div style="text-align:right;font-size:12px">Quick Path Horizon Corporate Services<br>Dubai, UAE · 0581464678<br>Info@quickpathhorizon.com</div></div>
+  <h1 style="margin:24px 0 4px">Business Setup Proposal</h1><div style="color:#5A6B7D">${l ? 'Prepared for ' + esc(l.name) + ' · ' : ''}${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })} · valid 7 days</div>
+  <h3 style="margin-top:24px">${esc(e.z.name)} — ${esc(e.z.type)} · ${e.visas} visa(s) · ${C.acts} activities</h3>
+  <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:14px">${e.rows.map(r => `<tr><td style="padding:8px;border-bottom:1px solid #E3E8EE">${esc(r[0])}</td><td style="padding:8px;border-bottom:1px solid #E3E8EE;text-align:right">${aed(r[1])}</td></tr>`).join('')}
+  <tr><td style="padding:8px;border-bottom:1px solid #E3E8EE">QPH service fee${e.disc ? ' (after ' + C.disc + '% discount)' : ''}</td><td style="padding:8px;border-bottom:1px solid #E3E8EE;text-align:right">${aed(e.feeNet)}</td></tr>
+  <tr><td style="padding:8px">VAT 5% on service fee</td><td style="padding:8px;text-align:right">${aed(e.vat)}</td></tr>
+  <tr><td style="padding:12px 8px;font-weight:800;font-size:18px;border-top:2px solid #0E2A47">Total</td><td style="padding:12px 8px;font-weight:800;font-size:18px;text-align:right;border-top:2px solid #0E2A47;color:#E46E1B">${aed(e.total)}</td></tr></table>
+  <p style="font-size:12px;color:#5A6B7D;margin-top:30px">Government fees are indicative and subject to change by the issuing authority. Demo proposal generated by QPH CRM.</p></div>`;
+  setTimeout(() => { window.print(); pa.hidden = true; }, 200);
+}
+
+/* ---------------- campaigns ---------------- */
+function vCampaigns() {
+  const L = S.leads.filter(l => inPeriod(l.createdAt));
+  const key = { campaign: l => l.attr.campaign, adset: l => l.attr.adset && (l.attr.campaign + ' › ' + l.attr.adset), ad: l => l.attr.ad && (l.attr.adset + ' › ' + l.attr.ad), utm: l => (l.attr.utm.utm_source || '') && (l.attr.utm.utm_source + ' / ' + (l.attr.utm.utm_medium || '')), term: l => l.attr.utm.utm_term }[campTab];
+  const groups = {}; L.forEach(l => { const k = key(l); if (!k || k === '(none)') return; (groups[k] = groups[k] || []).push(l); });
+  const rows = Object.entries(groups).map(([k, arr]) => { const won = arr.filter(l => l.stage === 'Closed Won'); const q = arr.filter(l => STAGES.indexOf(l.stage) >= 5 && STAGES.indexOf(l.stage) <= 9); const spend = campTab === 'campaign' ? (S.adSpend[k] || 0) : 0; return { k, n: arr.length, dup: arr.filter(l => l.dupOf).length, q: q.length, won: won.length, rev: won.reduce((s, l) => s + (l.payment ? l.payment.amount : 0), 0), spend, src: arr[0].source }; }).sort((a, b) => b.n - a.n);
+  const tot = rows.reduce((s, r) => ({ n: s.n + r.n, won: s.won + r.won, rev: s.rev + r.rev, spend: s.spend + r.spend }), { n: 0, won: 0, rev: 0, spend: 0 });
+  return `<div class="hello"><div><h2>Campaigns & UTM tracking</h2><div class="muted">Every lead keeps its campaign, ad set, ad name and UTM parameters — so you see which ad actually brings paying clients.</div></div>${periodSeg()}</div>
+  <div class="stats">${stat('Tracked leads', tot.n, 'with campaign data', '', 'hero')}${stat('Won from ads', tot.won, '', '')}${stat('Revenue from ads', aed(tot.rev), '', '')}${campTab === 'campaign' ? stat('ROAS', tot.spend ? (tot.rev / tot.spend).toFixed(1) + 'x' : '—', 'spend ' + aed(tot.spend), '') : ''}</div>
+  <div class="tabs">${[['campaign', 'Campaign'], ['adset', 'Ad set / Ad group'], ['ad', 'Ad name'], ['utm', 'utm_source / medium'], ['term', 'Keyword (utm_term)']].map(([k, t]) => `<button class="${campTab === k ? 'on' : ''}" onclick="campTab='${k}';render()">${t}</button>`).join('')}</div>
+  <div class="card tbl-wrap"><table class="tbl"><thead><tr><th>${campTab === 'campaign' ? 'Campaign' : campTab === 'adset' ? 'Campaign › Ad set' : campTab === 'ad' ? 'Ad set › Ad' : campTab === 'utm' ? 'Source / Medium' : 'Keyword'}</th><th class="num">Leads</th><th class="num">Duplicates</th><th class="num">Qualified+</th><th class="num">Won</th><th class="num">Conv %</th><th class="num">Revenue</th>${campTab === 'campaign' ? '<th class="num">Spend</th><th class="num">CPL</th><th class="num">Cost / client</th>' : ''}</tr></thead><tbody>
+  ${rows.map(r => `<tr class="click" onclick="${campTab === 'campaign' ? `filterGo({campaign:'${esc(r.k).replace(/'/g, "\\'")}'})` : `$('q').value='${esc(r.k.split(' › ').pop().split(' / ')[0]).replace(/'/g, "\\'")}';filterGo({})`}"><td><b>${esc(r.k)}</b><span class="sub">${pill(r.src)}</span></td><td class="num">${r.n}</td><td class="num">${r.dup ? `<span class="pill p-dup">${r.dup}</span>` : 0}</td><td class="num">${r.q}</td><td class="num">${r.won}</td><td class="num">${Math.round(r.won / r.n * 100)}%</td><td class="num">${aed(r.rev)}</td>${campTab === 'campaign' ? `<td class="num">${aed(r.spend)}</td><td class="num">${r.spend ? aed(r.spend / (r.n - r.dup || 1)) : '—'}</td><td class="num">${r.spend && r.won ? aed(r.spend / r.won) : '—'}</td>` : ''}</tr>`).join('') || '<tr><td colspan="10"><div class="empty">No tracked leads in this period</div></td></tr>'}
+  </tbody></table></div><p class="small muted">CPL excludes duplicates, so the same person clicking two ads is not counted twice. Ad spend is entered in Settings (or synced from Meta / Google Ads in the live version).</p>`;
+}
+
+/* ---------------- operations ---------------- */
+function vOps() {
+  const cs = visibleCases();
+  return `<div class="toolbar"><div class="seg"><button class="${!opsMine ? 'on' : ''}" onclick="opsMine=false;render()">All cases</button><button class="${opsMine ? 'on' : ''}" onclick="opsMine=true;render()">${ME.role === 'ops' ? 'My cases' : 'Ops team'}</button></div><span class="count">${cs.length} cases · Closed Won leads arrive here automatically</span></div>
+  <div class="kanban">${OPS_STAGES.map((s, i) => { const arr = cs.filter(c => c.stage === s); return `<div class="kcol"><h3><span>${s}</span><span>${arr.length}</span></h3>${arr.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const dn = DOCS.filter(d => c.docs[d]).length; return `<div class="kcard" onclick="openCase('${c.id}')"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(c.company)}</b>${av(c.owner, 22)}</div><div class="sub">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)} · ${c.visas} visa</div><div class="sub">📄 ${dn}/${DOCS.length} docs</div><div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></div>`; }).join('')}</div>`; }).join('')}</div>`;
+}
+function caseDrawer() {
+  const c = S.cases.find(x => x.id === drawer.id); if (!c) { closeDrawer(); return ''; }
+  const l = S.leads.find(x => x.id === c.leadId) || { name: '', phone: '', attr: {} }; const si = OPS_STAGES.indexOf(c.stage); const z = zoneOf(c.zone);
+  const canEdit = ME.role !== 'sales';
+  return `<div class="dr-h"><div class="top">${av(c.owner, 36)}<div><h2>${esc(c.company)}</h2><div class="small muted">${c.id} · ${esc(l.name)} · ${esc(l.phone)} · ${esc(z.name)}</div></div><button class="icon-btn x" onclick="closeDrawer()">✕</button></div>
+  <div style="margin-top:10px" class="stepper">${OPS_STAGES.map((s, i) => `<button class="${i < si ? 'done' : i === si ? 'cur' : ''}" ${canEdit ? `onclick="setOps('${c.id}',${i})"` : 'disabled'}>${i < si ? '✓ ' : ''}${s}</button>`).join('')}</div>
+  <div class="dr-actions"><a class="btn btn-wa btn-sm" target="_blank" href="${waLink(l.phone, WA_TEMPLATES[4].text.replace('{name}', l.name.split(' ')[0]))}">💬 Request documents</a>${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="opsAssign('${c.id}',this.value)">${TEAM.filter(t => t.role === 'ops').map(t => `<option value="${t.id}" ${c.owner === t.id ? 'selected' : ''}>Ops: ${t.name}</option>`).join('')}</select>` : ''}${l.id ? `<button class="btn btn-sm" onclick="openLead('${l.id}')">Sales lead ${l.id}</button>` : ''}</div></div>
+  <div class="dr-b">
+    <div class="card"><div class="card-h"><h2>📄 Documents</h2><span class="small muted">${DOCS.filter(d => c.docs[d]).length}/${DOCS.length} · required to pass "Documents Collected"</span></div><div class="card-b checks">${DOCS.map(d => `<div class="check ${c.docs[d] ? 'done' : ''}" ${canEdit ? `onclick="toggleDoc('${c.id}','${d}')"` : ''}>${c.docs[d] ? '✅' : '⬜'} ${d}</div>`).join('')}</div></div>
+    <div class="card"><div class="card-h"><h2>🏛 Licence & visas</h2></div><div class="card-b"><div class="form" style="margin:0">
+      <div><label>Trade licence no.</label><input value="${esc(c.licenceNo)}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceNo',this.value)"></div>
+      <div><label>Licence expiry</label><input type="date" value="${c.licenceExpiry ? new Date(c.licenceExpiry).toISOString().slice(0, 10) : ''}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceExpiry',new Date(this.value).getTime())"></div>
+      <div><label>Jurisdiction</label><input value="${esc(z.name)} · ${esc(z.type)}" disabled></div><div><label>Visas in package</label><input value="${c.visas}" disabled></div></div>
+      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map(v => `<tr><td>${esc(v.name)}</td><td>${pill(v.status, v.status === 'Stamped' ? 'p-closed-won' : 'p-follow-up')}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
+    </div></div>
+    <div class="card"><div class="card-h"><h2>🕑 Case log</h2></div><div class="card-b"><ul class="tl">${[...c.log].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
+  </div>`;
+}
+function setOps(id, i) {
+  const c = S.cases.find(x => x.id === id);
+  if (i > 1 && DOCS.some(d => !c.docs[d])) return toast('📄 Complete all documents before moving past Documents Collected');
+  if (i >= 4 && !c.licenceNo && i > OPS_STAGES.indexOf(c.stage)) { c.licenceNo = zoneOf(c.zone).name.split(' ')[0].toUpperCase() + '-' + Math.floor(40000 + Math.random() * 9999); c.licenceExpiry = Date.now() + 365 * D; }
+  if (i >= 6 && !c.visaHolders.length) { const l = S.leads.find(x => x.id === c.leadId); c.visaHolders = [{ name: l ? l.name : 'Owner', status: i >= 7 ? 'Stamped' : 'In process', expiry: i >= 7 ? Date.now() + 730 * D : null }]; }
+  if (i >= 7) c.visaHolders.forEach(v => { v.status = 'Stamped'; v.expiry = v.expiry || Date.now() + 730 * D; });
+  c.log.push({ at: Date.now(), by: ME.id, text: `Stage → ${OPS_STAGES[i]}` }); c.stage = OPS_STAGES[i]; save(); render();
+  toast(i === 4 ? '🏛 Trade licence issued — client is now a Customer' : i === 8 ? '🎉 Setup completed!' : 'Stage → ' + OPS_STAGES[i]);
+}
+function toggleDoc(id, d) { const c = S.cases.find(x => x.id === id); c.docs[d] = !c.docs[d]; c.log.push({ at: Date.now(), by: ME.id, text: `${d} ${c.docs[d] ? 'received' : 'marked missing'}` }); save(); render(); }
+function caseSet(id, k, v) { const c = S.cases.find(x => x.id === id); c[k] = v; c.log.push({ at: Date.now(), by: ME.id, text: `${k === 'licenceNo' ? 'Licence no.' : 'Licence expiry'} updated` }); save(); render(); }
+function opsAssign(id, uid) { const c = S.cases.find(x => x.id === id); c.owner = uid; c.log.push({ at: Date.now(), by: ME.id, text: 'Assigned to ' + user(uid).name }); save(); render(); }
+
+function vCustomers() {
+  const cs = S.cases.filter(c => OPS_STAGES.indexOf(c.stage) >= 4);
+  return `<div class="card tbl-wrap"><div class="card-h"><h2>Customers</h2><span class="small muted">${cs.length} companies with trade licence issued</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Jurisdiction</th><th>Licence</th><th>Expiry</th><th>Status</th><th>Ops</th></tr></thead><tbody>
+  ${cs.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; return `<tr class="click" onclick="openCase('${c.id}')"><td><b>${esc(c.company)}</b><span class="sub">${c.id}</span></td><td>${esc(l.name || '')}<span class="sub">${esc(l.phone || '')}</span></td><td>${esc(zoneOf(c.zone).name)}</td><td class="mono">${esc(c.licenceNo)}</td><td>${c.licenceExpiry ? expiryPill(c.licenceExpiry) : '—'}</td><td>${pill(c.stage, c.stage === 'Setup Completed' ? 'p-closed-won' : 'p-qualified')}</td><td>${av(c.owner, 24)}</td></tr>`; }).join('') || '<tr><td colspan="7"><div class="empty">No customers yet</div></td></tr>'}</tbody></table></div>`;
+}
+function vRenewals() {
+  const cs = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 90 * D).sort((a, b) => a.licenceExpiry - b.licenceExpiry);
+  return `<div class="card tbl-wrap"><div class="card-h"><h2>Licence renewals · next 90 days</h2><span class="small muted">Alerts at 60, 30 and 7 days</span></div><table class="tbl"><thead><tr><th>Company</th><th>Licence</th><th>Expires</th><th>In</th><th></th></tr></thead><tbody>
+  ${cs.map(c => { const l = S.leads.find(x => x.id === c.leadId) || { name: '', phone: '' }; return `<tr><td><b style="cursor:pointer" onclick="openCase('${c.id}')">${esc(c.company)}</b><span class="sub">${esc(l.name)} · ${esc(l.phone)}</span></td><td class="mono">${esc(c.licenceNo)}</td><td>${fmtDate(c.licenceExpiry, false)}</td><td>${expiryPill(c.licenceExpiry)}</td><td style="white-space:nowrap"><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, `Hi ${l.name.split(' ')[0]}, your trade licence ${c.licenceNo} for ${c.company} expires on ${fmtDate(c.licenceExpiry, false)}. Shall we start the renewal?`)}">💬 Remind</a> <button class="btn btn-sm" onclick="renew('${c.id}')">Renewed +1yr</button></td></tr>`; }).join('') || '<tr><td colspan="5"><div class="empty">No renewals due</div></td></tr>'}</tbody></table></div>`;
+}
+function renew(id) { const c = S.cases.find(x => x.id === id); c.licenceExpiry = Math.max(c.licenceExpiry, Date.now()) + 365 * D; c.log.push({ at: Date.now(), by: ME.id, text: 'Licence renewed +1 year' }); save(); render(); toast('🔁 Renewed until ' + fmtDate(c.licenceExpiry, false)); }
+
+/* ---------------- settings ---------------- */
+function vSettings() {
+  const tabs = [['team', 'Team & roles'], ['integrations', 'Lead sources & integrations'], ['utm', 'UTM tester'], ['prices', 'Price list'], ['spend', 'Ad spend'], ['data', 'Data']];
+  let b = '';
+  if (setTab === 'team') b = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Dashboard</th><th>Can do</th><th>Cannot do</th></tr></thead><tbody>${TEAM.map(t => `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 28)}<b>${esc(t.name)}</b></div></td><td>${esc(t.title)}</td><td>${t.role === 'admin' ? 'Company dashboard' : t.role === 'sales' ? 'Sales dashboard (own leads)' : 'Operations dashboard'}</td><td class="small">${t.role === 'admin' ? 'Everything: all leads, campaigns, ops, settings, delete, reassign' : t.role === 'sales' ? 'Own leads, follow-ups, WhatsApp, calculator & proposals, duplicates' : 'Ops board, documents, licences, visas, customers, renewals'}</td><td class="small">${t.role === 'admin' ? '—' : t.role === 'sales' ? "Other reps' leads, operations documents, delete" : 'Sales leads & campaigns, delete'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">Demo: 5 users. Live version uses email OTP login per user. New leads are split round-robin between sales; Closed Won cases round-robin between operations.</p>`;
+  if (setTab === 'integrations') b = `<div class="int-grid">
+    ${int('🟦 Meta Lead Ads', 'Facebook & Instagram instant forms arrive in seconds via webhook with campaign, ad set, ad name, form name and all form answers.', 'POST /webhooks/meta-leads', 'Connected (demo)')}
+    ${int('🟥 Google Ads', 'Google lead-form extensions + website forms with gclid. Campaign, ad group, keyword (utm_term) captured.', 'POST /webhooks/google-leads', 'Connected (demo)')}
+    ${int('🌐 Website forms + UTM', 'A small script on quickpathhorizon.com saves utm_* , gclid, fbclid and landing page into hidden fields on every form.', '&lt;script src="qph-utm.js"&gt;', 'Snippet ready')}
+    ${int('💬 WhatsApp Business API', 'Shared team inbox on 0581464678. New numbers become leads, auto-welcome, templates, 24h window, ticks.', 'Meta Cloud API · phone_number_id', 'Demo mode')}
+    ${int('✨ AI Agent', 'Polish Hinglish notes to English, AI next step per lead, AI WhatsApp reply drafts, auto-update stage on 🤖-tagged chats.', 'Claude / Gemini API key', 'Demo mode')}
+    ${int('🧬 Duplicate check', 'Phone (last 9 digits) + email. Duplicate tagged, linked, assigned to same owner, original gets a Re-enquired note.', 'Rule: phone OR email', 'Active')}
+  </div>
+  <div class="card" style="margin-top:16px"><div class="card-h"><h2>Website UTM capture snippet</h2></div><div class="card-b"><div class="code">&lt;script&gt;(function(){var p=new URLSearchParams(location.search),k=['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid'];k.forEach(function(x){if(p.get(x))localStorage.setItem('qph_'+x,p.get(x))});if(!localStorage.qph_landing)localStorage.qph_landing=location.href;document.querySelectorAll('form').forEach(function(f){k.concat('landing').forEach(function(x){var i=document.createElement('input');i.type='hidden';i.name=x;i.value=localStorage.getItem('qph_'+x)||'';f.appendChild(i)})})})();&lt;/script&gt;</div><p class="small muted">Keeps the first-click UTM even if the visitor browses other pages before submitting the form.</p></div></div>`;
+  if (setTab === 'utm') b = `<div class="card"><div class="card-h"><h2>UTM tester</h2><span class="small muted">Paste any ad URL to see what the CRM will store</span></div><div class="card-b"><input class="inp" id="utmIn" value="https://quickpathhorizon.com/business-setup/?utm_source=facebook&utm_medium=paid_social&utm_campaign=qph_freezone_nov26&utm_term=uae_expats_25_45&utm_content=video_2_visa&fbclid=IwAR2xyz" oninput="utmTest()"><div id="utmOut" style="margin-top:14px"></div></div></div>`;
+  if (setTab === 'prices') b = `<div class="card tbl-wrap"><div class="card-h"><h2>Free zone & authority price list (AED)</h2><span class="small muted">Used by the cost calculator · indicative demo values</span></div><table class="tbl price-tbl"><thead><tr><th>Zone</th><th>Type</th><th class="num">Licence</th><th class="num">Per visa</th><th class="num">Est. card</th><th class="num">Incl. activities</th><th class="num">Extra activity</th></tr></thead><tbody>${S.zones.map((z, i) => `<tr><td><b>${esc(z.name)}</b><span class="sub">${esc(z.emirate)}</span></td><td>${esc(z.type)}</td>${['licence', 'perVisa', 'estCard', 'inclActs', 'extraAct'].map(k => `<td class="num"><input type="number" value="${z[k]}" onchange="S.zones[${i}].${k}=+this.value;save()"></td>`).join('')}</tr>`).join('')}</tbody></table>
+  <div class="card-b"><h3 style="font-size:14px;margin-bottom:8px">Add-ons & service fee</h3><table class="tbl price-tbl"><tbody>${S.addons.map((a, i) => `<tr><td>${esc(a.name)}</td><td class="sub">${a.per === 'visa' ? 'per visa' : 'one-time'}</td><td class="num"><input type="number" value="${a.price}" onchange="S.addons[${i}].price=+this.value;save()"></td></tr>`).join('')}<tr><td><b>QPH service fee</b></td><td></td><td class="num"><input type="number" value="${S.serviceFee}" onchange="S.serviceFee=+this.value;save()"></td></tr></tbody></table></div></div>`;
+  if (setTab === 'spend') b = `<div class="card tbl-wrap"><div class="card-h"><h2>Monthly ad spend per campaign (AED)</h2><span class="small muted">Used for CPL, cost per client and ROAS</span></div><table class="tbl price-tbl"><tbody>${Object.keys(S.adSpend).map(k => `<tr><td><b>${esc(k)}</b></td><td class="num"><input type="number" value="${S.adSpend[k]}" onchange="S.adSpend['${esc(k)}']=+this.value;save()"></td></tr>`).join('')}</tbody></table></div>`;
+  if (setTab === 'data') b = `<div class="card"><div class="card-b" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportCSV()">⬇ Export leads CSV (with UTM)</button><button class="btn btn-danger" onclick="if(confirm('Reset all demo data?')){localStorage.removeItem(KEY);S=load();render();toast('Demo data reset')}">↺ Reset demo data</button></div></div>`;
+  setTimeout(() => { if ($('utmIn')) utmTest(); }, 0);
+  return `<div class="tabs">${tabs.map(([k, t]) => `<button class="${setTab === k ? 'on' : ''}" onclick="setTab='${k}';render()">${t}</button>`).join('')}</div>${b}`;
+}
+function int(t, d, code, st) { return `<div class="int"><h3>${t}</h3><p>${d}</p><div class="code" style="font-size:11px">${code}</div><div style="margin-top:10px">${pill(st, st === 'Active' || st.startsWith('Connected') ? 'p-closed-won' : 'p-follow-up')}</div></div>`; }
+function utmTest() {
+  let out = ''; try { const u = new URL($('utmIn').value); const p = {}; u.searchParams.forEach((v, k) => p[k] = v);
+    const src = /google/.test(p.utm_source || '') || p.gclid ? 'Google' : /facebook|instagram|meta|fb|ig/.test(p.utm_source || '') || p.fbclid ? 'Meta' : 'Website';
+    out = `<div class="kv three">${[['Detected source', src], ['Landing page', u.origin + u.pathname], ['utm_source', p.utm_source], ['utm_medium', p.utm_medium], ['utm_campaign → Campaign', p.utm_campaign], ['utm_term → Ad set / keyword', p.utm_term], ['utm_content → Ad name', p.utm_content], ['Click ID', p.gclid ? 'gclid=' + p.gclid : p.fbclid ? 'fbclid=' + p.fbclid : '']].map(([k, v]) => `<div><span>${k}</span><b class="mono">${esc(v || '—')}</b></div>`).join('')}</div>`;
+  } catch (e) { out = '<div class="muted">Enter a full URL starting with https://</div>'; }
+  $('utmOut').innerHTML = out;
+}
+
+/* ---------------- alerts / modal ---------------- */
+function alerts() {
+  if (!ME) return []; const a = []; const L = visibleLeads(); const now = Date.now();
+  L.filter(l => l.dupOf).forEach(l => a.push(['🧬', `Duplicate: ${l.name} (${l.id}) matches ${l.dupOf}`, `openLead('${l.id}')`]));
+  L.filter(l => l.stage === 'New' && now - l.createdAt > 2 * H).slice(0, 6).forEach(l => a.push(['⏳', `${l.name} untouched for ${ago(l.createdAt).replace(' ago', '')}`, `openLead('${l.id}')`]));
+  L.filter(l => l.followUp && l.followUp < now && OPEN_STAGES.includes(l.stage)).slice(0, 6).forEach(l => a.push(['🔴', `Overdue follow-up: ${l.name}`, `openLead('${l.id}')`]));
+  L.filter(l => unread(l)).slice(0, 5).forEach(l => a.push(['💬', `Unread WhatsApp from ${l.name}`, `openChat('${l.id}')`]));
+  if (ME.role !== 'sales') S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < now + 60 * D).forEach(c => a.push(['🔁', `Licence renewal: ${c.company} (${Math.round((c.licenceExpiry - now) / D)}d)`, `openCase('${c.id}')`]));
+  return a;
+}
+function alertsModal() { const a = alerts(); modal(`<h2>🔔 Alerts</h2><ul class="alerts">${a.map(([i, t, fn]) => `<li onclick="closeModal();${fn}"><span>${i}</span><span>${esc(t)}</span></li>`).join('') || '<li>All clear ✅</li>'}</ul><div class="modal-f"><button class="btn" onclick="closeModal()">Close</button></div>`); }
+function modal(h) { $('modalBody').innerHTML = h; $('modal').classList.add('open'); }
+function closeModal() { $('modal').classList.remove('open'); }
+
+boot();

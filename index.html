@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QPH CRM · Quick Path Horizon</title>
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <div class="login-card">
+    <img src="logo.png" alt="Quick Path Horizon">
+    <h1>CRM Login</h1>
+    <p class="muted">Demo mode: pick a team member to see their dashboard.</p>
+    <div id="loginUsers" class="login-users"></div>
+    <div class="demo-note">Demo build · data stays in this browser only</div>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
+  <aside class="side" id="side">
+    <div class="side-logo"><img src="logo.png" alt="Quick Path Horizon"></div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      <div class="me" id="me"></div>
+      <button class="btn btn-sm" id="logoutBtn">Switch user</button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn menu" id="menuBtn" aria-label="Menu">☰</button>
+      <h1 id="pageTitle">Dashboard</h1>
+      <div class="search"><input id="q" placeholder="Search name, phone, campaign…"></div>
+      <button class="icon-btn bell" id="bellBtn" aria-label="Alerts">🔔<span id="bellCount"></span></button>
+      <button class="btn btn-navy" id="simBtn" title="Simulate a lead arriving from Meta / Google / Website">⚡ Simulate lead</button>
+      <button class="btn btn-primary" id="addLeadBtn">+ Add lead</button>
+    </header>
+    <div class="demo-bar">Demo CRM for Quick Path Horizon · sample data · WhatsApp, Meta, Google and AI run in demo mode</div>
+    <section id="view" class="view"></section>
+  </main>
+</div>
+
+<div class="drawer-bg" id="drawerBg"><aside class="drawer" id="drawer"></aside></div>
+<div class="modal-bg" id="modal"><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+<script src="data.js?v=2"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>
