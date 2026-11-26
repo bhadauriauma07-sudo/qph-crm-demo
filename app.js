@@ -31,7 +31,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 13;
+const APP_V = 14;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -170,7 +170,7 @@ function boot() {
   if (!ME) { $('login').hidden = false; $('app').hidden = true; $('loginUsers').innerHTML = TEAM.map(t => `<button class="login-user" onclick="login('${t.id}')">${av(t.id, 36)}<div><b>${esc(t.name)}</b><span class="muted small">${esc(t.title)}</span></div><span class="role pill ${t.role === 'admin' ? 'p-qualified' : t.role === 'sales' ? 'p-new' : 'p-contacted'}">${t.role === 'ops' ? 'Operations' : t.role === 'admin' ? 'Admin' : 'Sales'}</span></button>`).join(''); return; }
   $('login').hidden = true; $('app').hidden = false;
   $('me').innerHTML = `${av(ME.id, 32)}<div style="min-width:0"><b>${esc(ME.name)}</b><span>${esc(ME.title)}</span></div>`;
-  $('simBtn').hidden = ME.role === 'ops'; $('addLeadBtn').hidden = ME.role === 'ops';
+  $('addLeadBtn').hidden = ME.role === 'ops';
   route = (location.hash.slice(1) || 'dashboard'); if (!navItems().some(n => n.id === route)) route = 'dashboard';
   render();
 }
@@ -179,7 +179,6 @@ $('logoutBtn').onclick = () => { sessionStorage.removeItem('qph_uid'); closeDraw
 $('menuBtn').onclick = () => { $('side').classList.toggle('open'); $('scrim').classList.toggle('open'); };
 $('scrim').onclick = () => { $('side').classList.remove('open'); $('scrim').classList.remove('open'); };
 $('addLeadBtn').onclick = () => addLeadModal();
-$('simBtn').onclick = () => simModal();
 $('bellBtn').onclick = () => alertsModal();
 $('q').oninput = () => { if (!['leads', 'newleads', 'contacted'].includes(route) && ME.role !== 'ops') go('leads'); else { drawer = null; render(); } };
 $('drawerBg').onclick = e => { if (e.target.id === 'drawerBg') closeDrawer(); };
@@ -395,7 +394,7 @@ function vDuplicates() {
     <td><b style="cursor:pointer" onclick="openLead('${o.id}')">${esc(o.name || '')} · ${o.id || ''}</b><span class="sub">${esc(o.phone || '')} · ${pill(o.stage || '')}</span><span class="sub">${pill(o.source || '')} ${esc((o.attr || {}).campaign || '')}</span></td>
     <td>${pill(on, 'p-dup')}</td><td>${av(d.owner, 24)}</td>
     <td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick="mergeDup('${d.id}')">Merge into original</button> <button class="btn btn-sm" onclick="notDup('${d.id}')">Not a duplicate</button></td></tr>`; }).join('')}
-  </tbody></table></div>` : '<div class="card"><div class="empty">No duplicates right now - try Simulate lead → "Make it a duplicate"</div></div>');
+  </tbody></table></div>` : '<div class="card"><div class="empty">No duplicate leads right now</div></div>');
 }
 function mergeDup(id) {
   const d = S.leads.find(l => l.id === id); const o = S.leads.find(l => l.id === d.dupOf); if (!o) return;
@@ -512,7 +511,7 @@ function leadPage() {
     <div class="lp-av" style="background:${user(l.owner).color}">${initials(l.name)}</div>
     <div style="flex:1;min-width:0"><h2>${esc(l.name)}</h2>
       <div class="lp-meta">📱 ${esc(l.phone)} · ✉ ${esc(l.email || '-')}</div>
-      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${pill(l.stage)} ${l.temp === 'Hot' ? pill('Hot', 'p-hot') : pill(l.temp)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')}<button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div></div>
+</div>
     <div class="lp-nav"><button class="btn btn-sm" onclick="navLead(-1)" ${pos <= 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${pos + 1} / ${L.length}</span><button class="btn btn-sm" onclick="navLead(1)" ${pos >= L.length - 1 ? 'disabled' : ''}>Next ›</button><button class="icon-btn" onclick="closeDrawer()">✕</button></div>
   </div>
   <div class="dr-actions">

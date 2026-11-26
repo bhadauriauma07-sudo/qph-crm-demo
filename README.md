@@ -13,7 +13,6 @@ Static demo CRM for a UAE business-setup company. Open `index.html` or host with
 - **Separate dashboards** for Admin, Sales and Operations
 - **Lead source tracking:** Meta / Google / Website / WhatsApp, with campaign name, ad set, ad name, form, `utm_source/medium/campaign/term/content`, gclid/fbclid and landing page on every lead
 - **Duplicate check:** phone (last 9 digits, so +971 / 00971 / 05… all match) or email. Tags the lead *Duplicate*, links it to the original, assigns the same owner, and offers Merge or Not a duplicate
-- **Simulate lead:** shows a Meta, Google or website lead arriving with its UTM data, including a duplicate
 - **Stage rules (SOP):** New → Contacted → … → Payment Received → Closed Won → automatic Operations case
 - **Cost calculator** for 12 free zones, mainland and offshore: visas, activities, add-ons, service fee, VAT, zone comparison, save to lead, print/PDF, WhatsApp quote
 - **WhatsApp inbox (demo):** templates, 24-hour window, AI reply, Polish
