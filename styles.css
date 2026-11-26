@@ -529,3 +529,20 @@ details.trk summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--
 .lc-top .pill{flex:none;max-width:48%;overflow:hidden;text-overflow:ellipsis}
 .lc-foot{flex-wrap:wrap}
 .lc-extra .btn{white-space:nowrap}
+
+/* ---------- Digimac font style: Montserrat, lighter weights ---------- */
+body,button,input,select,textarea{font-family:"Montserrat",system-ui,sans-serif}
+body{font-size:13.5px;letter-spacing:-.005em}
+h1,h2,h3,h4{font-family:"Montserrat",system-ui,sans-serif;font-weight:600;letter-spacing:-.01em}
+.topbar h1{font-size:19px;font-weight:600}
+.lp-h h2{font-size:24px;font-weight:600}
+.hello h2{font-size:20px;font-weight:600}
+.card-h h2{font-size:14.5px;font-weight:600}
+.stat b{font-weight:600}
+.btn,.pill,.nav-i.on,.seg button,.tabs button{font-weight:500}
+.nav-h{font-family:"Montserrat",system-ui,sans-serif;font-weight:600}
+.nav-i{font-weight:400}
+.form label,.kv div span,.kv1 span{font-weight:500}
+.tbl th{font-weight:600}
+.tbl td b,.lc-top b,.wa-item b,.list-plain b{font-weight:600}
+.quote-h .total,.ov b{font-weight:600}

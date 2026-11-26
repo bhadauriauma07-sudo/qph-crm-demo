@@ -5,7 +5,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 10;
+const APP_V = 11;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -506,19 +506,7 @@ function leadPage() {
     ${kids.length ? `<div class="dup-box" style="background:#FFF8EC;border-color:#F3D19C"><div style="font-size:22px">🔁</div><div style="flex:1"><b style="color:var(--amber)">Re-enquired ${kids.length}×</b><div class="small">${kids.map(k => `<a style="cursor:pointer" onclick="openLead('${k.id}')">${k.id}</a> via ${esc(k.source)} ${esc(k.attr.campaign || '')} (${ago(k.createdAt)})`).join('<br>')}</div></div></div>` : ''}
     ${l.ai ? `<div class="ai-box"><b>✨ AI Agent</b> <span class="small muted">· ${fmtDate(l.ai.at)}</span><div style="margin-top:6px"><b style="color:var(--navy)">Summary:</b> ${esc(l.ai.summary)}</div><div style="margin-top:4px"><b style="color:var(--navy)">Next step:</b> ${esc(l.ai.next)}</div></div>` : ''}
 
-    <div class="card"><div class="card-h"><h2>1 · Contact status</h2><span class="small muted">Unlocks: Contacted</span></div><div class="card-b">
-      <div class="cs3">
-        <button class="${l.stage === 'New' ? 'on' : ''}" onclick="tryStage('${l.id}','New')">● New</button>
-        <button class="${ci >= 1 ? 'on ok' : ''}" onclick="tryStage('${l.id}','Contacted')">✓ Contacted</button>
-        <button class="${l.stage === 'Not Contacted' ? 'on bad' : ''}" onclick="tryStage('${l.id}','Not Contacted')">✕ Not contacted</button>
-      </div>
-      <div class="chk-row ${NEED.has('contact') ? 'need-box' : ''}" data-path="contact">${[['wa', 'WhatsApp sent'], ['call', 'Called'], ['email', 'Email sent']].map(([k, t]) => `<label class="chk ${l.contact[k] ? 'on' : ''}"><input type="checkbox" ${l.contact[k] ? 'checked' : ''} onchange="setL('${l.id}','contact.${k}',this.checked)"> ${t}</label>`).join('')}</div>
-      ${NEED.has('contact') ? `<div class="need-t" style="margin-top:6px">Tick WhatsApp sent, Called or Email sent — required for ${esc(NEED_FOR)}</div>` : ''}
-      <div class="form" style="margin-top:10px"><div>${req('If not contacted — reason')}${sel(l, 'ncReason', NOT_CONTACTED_REASONS)}</div><div>${req('Retry at')}${inp(l, 'retryAt', 'datetime-local')}</div></div>
-      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Junk')">🗑 Mark junk</button><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Lost')">Mark lost</button></div>
-    </div></div>
-
-    <div class="card"><div class="card-h"><h2>2 · Lead details & qualification</h2><span class="small muted">* required to unlock Qualified</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
+    <div class="card"><div class="card-h"><h2>1 · Lead details & qualification</h2><span class="small muted">* required to unlock Qualified</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
       <div>${req('Full name')}${inp(l, 'name')}</div><div>${req('Phone', normPhone(l.phone).length >= 8 || false)}${inp(l, 'phone', 'tel')}</div><div>${req('Email')}${inp(l, 'email', 'email')}</div>
       <div>${req('Source')}<input value="${esc(l.source + (a.platform ? ' – ' + a.platform : ''))}" disabled></div><div>${req('Service / business type')}${sel(l, 'service', SERVICES)}</div><div>${req('Customer interested?', l.interested === 'Yes' || false)}${sel(l, 'interested', ['Yes', 'Not sure', 'No'])}</div>
       <div>${req('Number of visas', !qmiss(l.req.visas) || false)}${inp(l, 'req.visas', 'number', 'min="0" max="10"')}</div>
@@ -529,6 +517,18 @@ function leadPage() {
       <div>${req('When to start')}${sel(l, 'start', ['Immediately', 'Within 1 month', '1–3 months', 'Just exploring'])}</div>
       <div>${req('Budget (AED)')}${inp(l, 'budget', 'number')}</div><div>${req('Hot / Warm / Cold')}${sel(l, 'temp', ['Hot', 'Warm', 'Cold'], '—')}</div><div>${req('Estimated deal value')}<input value="${aed(l.value)}" disabled></div>
     </div></div></div>
+
+    <div class="card"><div class="card-h"><h2>2 · Contact status</h2><span class="small muted">Unlocks: Contacted</span></div><div class="card-b">
+      <div class="cs3">
+        <button class="${l.stage === 'New' ? 'on' : ''}" onclick="tryStage('${l.id}','New')">● New</button>
+        <button class="${ci >= 1 ? 'on ok' : ''}" onclick="tryStage('${l.id}','Contacted')">✓ Contacted</button>
+        <button class="${l.stage === 'Not Contacted' ? 'on bad' : ''}" onclick="tryStage('${l.id}','Not Contacted')">✕ Not contacted</button>
+      </div>
+      <div class="chk-row ${NEED.has('contact') ? 'need-box' : ''}" data-path="contact">${[['wa', 'WhatsApp sent'], ['call', 'Called'], ['email', 'Email sent']].map(([k, t]) => `<label class="chk ${l.contact[k] ? 'on' : ''}"><input type="checkbox" ${l.contact[k] ? 'checked' : ''} onchange="setL('${l.id}','contact.${k}',this.checked)"> ${t}</label>`).join('')}</div>
+      ${NEED.has('contact') ? `<div class="need-t" style="margin-top:6px">Tick WhatsApp sent, Called or Email sent — required for ${esc(NEED_FOR)}</div>` : ''}
+      <div class="form" style="margin-top:10px"><div>${req('If not contacted — reason')}${sel(l, 'ncReason', NOT_CONTACTED_REASONS)}</div><div>${req('Retry at')}${inp(l, 'retryAt', 'datetime-local')}</div></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Junk')">🗑 Mark junk</button><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Lost')">Mark lost</button></div>
+    </div></div>
 
     <div class="card" id="sec-fu"><div class="card-h"><h2>3 · Follow-up & appointment</h2><span class="small muted">Unlocks: Follow-up · Appointment Booked</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
       <div>${req('Follow-up date & time', has(l.followUp) || undefined)}${inp(l, 'followUp', 'datetime-local')}</div>
