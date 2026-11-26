@@ -98,7 +98,8 @@ function buildSeed() {
   for (let i = 0; i < 46; i++) {
     const first = FIRST[i % FIRST.length], last = LAST[(i * 7) % LAST.length];
     const source = pick(srcWeights);
-    const stage = pick(stageWeights);
+    const PLAN = ['New', 'Contacted', 'Follow-up', 'Appointment Booked', 'Qualified', 'Proposal Sent', 'New', 'Payment Link Sent', 'Closed Won', 'Follow-up', 'Payment Received', 'Not Contacted', 'New', 'Appointment Booked', 'Closed Won', 'Proposal Sent', 'Junk', 'Contacted', 'Qualified', 'Closed Won', 'Lost', 'New', 'Follow-up'];
+    const stage = PLAN[i % PLAN.length];
     const created = now - Math.floor(rnd() * 40 * D) - (stage === 'New' ? 0 : 2 * D);
     const zone = pick(DEFAULT_ZONES.slice(0, 14));
     const phone = '+9715' + String(Math.floor(10000000 + rnd() * 89999999)).slice(0, 8);
@@ -147,14 +148,15 @@ function buildSeed() {
     lead.contact = { wa: contacted && rnd() < 0.8, call: contacted, email: contacted && rnd() < 0.3 };
     lead.interested = QP ? 'Yes' : contacted && rnd() < 0.5 ? 'Not sure' : '';
     lead.start = QP ? pick(['Immediately', 'Within 1 month']) : '';
-    lead.appt = stage === 'Appointment Booked' ? { at: lead.followUp, place: 'QPH Office, Dubai' } : {};
+    if (stage === 'Appointment Booked') { buildSeed.ap = (buildSeed.ap || 0) + 1; lead.followUp = now + [2 * H, -1 * D, 1 * D, 3 * D][(buildSeed.ap - 1) % 4]; }
+    lead.appt = stage === 'Appointment Booked' ? { at: lead.followUp, place: ['QPH Office, Dubai', 'Zoom / Google Meet'][i % 2] } : {};
     lead.payLink = ['Payment Link Sent', 'Payment Received', 'Closed Won'].includes(stage) ? { amount: lead.value, url: 'https://pay.quickpathhorizon.com/' + lead.id } : null;
     lead.ncReason = ''; lead.retryAt = null;
     if (!QP) { if (!contacted || rnd() < 0.5) lead.req.activity = ''; if (!contacted) lead.req.zone = ''; }
     if (stage === 'Not Contacted') { lead.ncReason = pick(NOT_CONTACTED_REASONS); lead.retryAt = lead.followUp; }
     if (stage === 'Lost' || stage === 'Junk') lead.reason = pick(LOST_REASONS);
     if (['Payment Received', 'Closed Won'].includes(stage)) lead.payment = { amount: lead.value, mode: pick(['Bank transfer', 'Card (payment link)', 'Cash']), ref: 'FT26' + (115000 + i * 37), date: created + 3 * D, status: 'confirmed', by: lead.owner, sentAt: created + 3 * D, confirmedBy: 'u1', confirmedAt: created + 3 * D + 2 * H };
-    if (stage === 'Payment Link Sent' && i % 2 === 0) lead.payment = { amount: lead.value, mode: 'Bank transfer', ref: 'FT26' + (220000 + i * 41), date: now - 5 * H, status: 'pending', by: lead.owner, sentAt: now - 4 * H };
+    if (stage === 'Payment Link Sent' && i < 23) lead.payment = { amount: lead.value, mode: 'Bank transfer', ref: 'FT26' + (220000 + i * 41), date: now - 5 * H, status: 'pending', by: lead.owner, sentAt: now - 4 * H };
     if (stage !== 'New') {
       const n = HINGLISH_NOTES[i % HINGLISH_NOTES.length];
       lead.notes.push({ by: lead.owner, at: created + 2 * H, text: n, polished: false });
@@ -172,13 +174,13 @@ function buildSeed() {
     leads.push(lead);
 
     if (stage === 'Closed Won') {
-      const opsStage = Math.floor(rnd() * OPS_STAGES.length);
+      const opsStage = [8, 2, 5, 8, 0, 7][cases.length % 6];
       const docs = {}; DOCS.forEach((d, k) => docs[d] = opsStage > 1 || k < 3);
       const exp = now + Math.floor((rnd() * 400 - 20) * D);
       cases.push({ id: 'C' + (3001 + cases.length), leadId: lead.id, company: first + ' ' + pick(['Trading', 'Consultancy', 'Technologies', 'Global', 'Ventures']) + ' ' + (zone.type === 'Mainland' ? 'LLC' : 'FZ-LLC'),
         stage: OPS_STAGES[opsStage], owner: ['u4', 'u5'][cases.length % 2], docs, zone: zone.id, visas: lead.req.visas, startedAt: created + 4 * D,
         licenceNo: opsStage >= 4 ? zone.name.split(' ')[0].toUpperCase() + '-' + (40000 + i * 37) : '', licenceExpiry: opsStage >= 4 ? exp : null,
-        visaHolders: opsStage >= 6 ? [{ name: lead.name, status: opsStage >= 7 ? 'Stamped' : 'In process', expiry: opsStage >= 7 ? exp + 300 * D : null }] : [],
+        visaHolders: opsStage >= 6 ? Array.from({ length: lead.req.visas }, (_, k) => ({ name: k ? first + ' – Employee ' + k : lead.name, status: opsStage >= 7 ? 'Stamped' : 'In process', expiry: opsStage >= 7 ? exp + 300 * D : null })) : [],
         log: [{ at: created + 4 * D, by: 'system', text: 'Case opened after Closed Won' }] });
     }
     if (['WhatsApp', 'Meta', 'Google'].includes(source) && i % 3 === 0) {

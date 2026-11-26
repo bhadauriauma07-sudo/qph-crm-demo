@@ -1,5 +1,5 @@
 /* QPH CRM demo — app */
-const KEY = 'qph_crm_demo_v2';
+const KEY = 'qph_crm_demo_v3';
 let S = load();
 let ME = null;
 let route = 'dashboard';
@@ -107,8 +107,8 @@ function estimate(c) {
 function nextId() { S.seq = (S.seq || 1200) + 1; return 'L' + S.seq; }
 function ingest(d) {
   const dup = findDup(d.phone, d.email);
-  const sales = TEAM.filter(t => t.role === 'sales');
-  const owner = dup ? dup.owner : (d.owner || sales[(S.rr++) % sales.length].id);
+  const mem = S.rrMembers && S.rrMembers.length ? S.rrMembers : TEAM.filter(t => t.role === 'sales').map(t => t.id);
+  const owner = dup ? dup.owner : (d.owner || mem[(S.rr++) % mem.length]);
   const z = S.zones.find(x => x.type === (d.reqType || 'Free Zone')) || S.zones[0];
   const l = { id: nextId(), name: d.name, phone: d.phone, email: d.email || '', nationality: d.nationality || '', source: d.source, stage: 'New', temp: 'Warm', owner, createdAt: Date.now(), updatedAt: Date.now(),
     service: d.service || 'Free Zone Company', req: { type: d.reqType || 'Free Zone', zone: '', activity: d.activity || '', visas: +d.visas || 1 }, value: 0, followUp: null,
@@ -126,7 +126,12 @@ function ingest(d) {
     l.activity.push({ at: Date.now(), by: 'system', text: `Auto-assigned to ${user(owner).name} (round robin)` });
   }
   if (d.source === 'WhatsApp' || d.sendWelcome) { S.chats[l.id] = [{ from: 'in', text: d.firstMsg || 'Hi, I need information about business setup', at: Date.now() - 30e3 }, { from: 'out', text: WA_TEMPLATES[0].text.replace('{name}', l.name.split(' ')[0]), at: Date.now(), by: 'auto' }]; l.activity.push({ at: Date.now(), by: 'auto', text: 'WhatsApp auto-welcome sent' }); }
-  S.leads.unshift(l); save();
+  if (S.email && S.email.autoWelcome && l.email) { const t = S.emailTpl[0]; l.emails = [{ at: Date.now(), to: l.email, subject: fillTpl(t.subject, l), by: 'auto', att: '' }]; l.contact.email = false; l.activity.push({ at: Date.now(), by: 'auto', text: `Auto welcome email sent to ${l.email}` }); }
+  S.leads.unshift(l);
+  const camp = l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : '';
+  notify(owner, `${dup ? '⚠ Duplicate' : '🆕 New'} ${d.source} lead assigned to you: ${l.name}${camp}${S.email && S.email.staffAlerts ? ' (email alert sent)' : ''}`, l.id);
+  if (owner !== 'u1') notify('u1', `${dup ? '⚠ Duplicate' : '🆕 New'} ${d.source} lead ${l.name} → ${user(owner).name}${dup ? '' : ' (round robin)'}`, l.id);
+  save();
   return { l, dup };
 }
 
@@ -148,7 +153,7 @@ $('scrim').onclick = () => { $('side').classList.remove('open'); $('scrim').clas
 $('addLeadBtn').onclick = () => addLeadModal();
 $('simBtn').onclick = () => simModal();
 $('bellBtn').onclick = () => alertsModal();
-$('q').oninput = () => { if (route !== 'leads' && ME.role !== 'ops') go('leads'); else render(); };
+$('q').oninput = () => { if (!['leads', 'newleads', 'contacted'].includes(route) && ME.role !== 'ops') go('leads'); else { drawer = null; render(); } };
 $('drawerBg').onclick = e => { if (e.target.id === 'drawerBg') closeDrawer(); };
 $('modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 window.onhashchange = () => { const r = location.hash.slice(1); if (r && r !== route && navItems().some(n => n.id === r)) { route = r; render(); } };
@@ -161,10 +166,13 @@ function navItems() {
   const unreadN = L.filter(l => unread(l) > 0).length;
   const newN = L.filter(l => l.stage === 'New').length;
   const renew = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 60 * D).length;
+  const apptN = L.filter(l => l.stage === 'Appointment Booked' && l.appt && l.appt.at && new Date(l.appt.at).toDateString() === new Date().toDateString()).length;
+  const contactedN = L.filter(l => ['Contacted', 'Follow-up', 'Not Contacted'].includes(l.stage)).length;
+  const custN = S.cases.filter(c => !(acctComplete(c) && c.stage === 'Setup Completed')).length, acctN = S.cases.filter(c => acctComplete(c) && c.stage === 'Setup Completed').length;
   const items = {
-    admin: [['h', 'Overview'], ['dashboard', '📊', 'Dashboard'], ['campaigns', '🎯', 'Campaigns & UTM'], ['h', 'Sales'], ['leads', '👥', 'All Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '🧮', 'Cost Calculator'], ['h', 'Operations'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed').length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '⚙️', 'Settings']],
-    sales: [['h', 'My work'], ['dashboard', '📊', 'My Dashboard'], ['leads', '👥', 'My Leads', newN, ''], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
-    ops: [['h', 'Operations'], ['dashboard', '📊', 'Ops Dashboard'], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['customers', '🏢', 'Customers'], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
+    admin: [['h', 'Overview'], ['dashboard', '📊', 'Dashboard'], ['campaigns', '🎯', 'Campaigns & UTM'], ['h', 'Leads'], ['newleads', '🆕', 'New Leads', newN, 'hot'], ['leads', '👥', 'All Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '🧮', 'Cost Calculator'], ['h', 'Operations'], ['customers', '🏢', 'Customers', custN, ''], ['operations', '🗂️', 'Operations Board'], ['accounts', '✅', 'Accounts', acctN, ''], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '⚙️', 'Settings']],
+    sales: [['h', 'My leads'], ['dashboard', '📊', 'My Dashboard'], ['newleads', '🆕', 'New Leads', newN, 'hot'], ['leads', '👥', 'All My Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
+    ops: [['h', 'Operations'], ['dashboard', '📊', 'Ops Dashboard'], ['customers', '🏢', 'Customers', custN, ''], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['accounts', '✅', 'Accounts', acctN, ''], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
   }[ME.role];
   return items.map(i => i[0] === 'h' ? { h: i[1] } : { id: i[0], ic: i[1], label: i[2], badge: i[3], cls: i[4] });
 }
@@ -174,8 +182,8 @@ function render() {
   const items = navItems();
   $('nav').innerHTML = items.map(n => n.h ? `<div class="nav-h">${n.h}</div>` : `<a class="nav-i ${route === n.id ? 'on' : ''}" onclick="go('${n.id}')"><span class="ic">${n.ic}</span>${n.label}${n.badge ? `<span class="badge ${n.cls || ''}">${n.badge}</span>` : ''}</a>`).join('');
   const cur = items.find(n => n.id === route); $('pageTitle').textContent = cur ? cur.label : '';
-  $('bellCount').textContent = alerts().length || '';
-  const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, followups: vFollowups, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
+  $('bellCount').textContent = (myNotifs().filter(n => !n.read).length + alerts().length) || '';
+  const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, newleads: vLeads, contacted: vLeads, appointments: vAppointments, accounts: vAccounts, followups: vFollowups, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
   if (drawer && drawer.kind === 'lead') { $('pageTitle').textContent = 'Lead'; $('view').innerHTML = leadPage(); return; }
   $('view').innerHTML = V();
   if (route === 'whatsapp') { const m = document.querySelector('.wa-msgs'); if (m) m.scrollTop = m.scrollHeight; }
@@ -283,6 +291,7 @@ function vOpsDash() {
     ${stat('My active cases', active.length, mine.length + ' total', "opsMine=true;go('operations')", 'hero')}
     ${stat('Documents pending', docsPending.length, 'cannot pass Documents Collected', "opsMine=true;go('operations')", docsPending.length ? 'warn' : '')}
     ${stat('Licences issued', issued, 'all time', "go('customers')")}
+    ${stat('Accounts complete', S.cases.filter(c => acctComplete(c) && c.stage === 'Setup Completed').length, 'licence + visas + docs', "go('accounts')")}
     ${stat('Visas in process', visasIP, '', "opsMine=true;go('operations')")}
     ${stat('Renewals ≤ 60 days', renew.length, 'licence expiry', "go('renewals')", renew.length ? 'warn' : '')}
   </div>
@@ -299,8 +308,8 @@ function expiryPill(ts) { const d = Math.round((ts - Date.now()) / D); return d 
 
 /* ---------------- leads ---------------- */
 function filteredLeads() {
-  const q = $('q').value.trim().toLowerCase(); const f = leadFilter;
-  return visibleLeads().filter(l => (!f.stage || l.stage === f.stage) && (!f.source || l.source === f.source) && (!f.campaign || l.attr.campaign === f.campaign) && (!f.owner || l.owner === f.owner) && (!f.temp || l.temp === f.temp) && (!f.dup || l.dupOf || dupsOf(l.id).length) && (!f.pay || (l.payment && l.payment.status === 'pending'))
+  const q = $('q').value.trim().toLowerCase(); const f = leadFilter; const RS = { newleads: ['New'], contacted: ['Contacted', 'Follow-up', 'Not Contacted'] }[route];
+  return visibleLeads().filter(l => (!RS || RS.includes(l.stage)) && (!f.stage || l.stage === f.stage) && (!f.source || l.source === f.source) && (!f.campaign || l.attr.campaign === f.campaign) && (!f.owner || l.owner === f.owner) && (!f.temp || l.temp === f.temp) && (!f.dup || l.dupOf || dupsOf(l.id).length) && (!f.pay || (l.payment && l.payment.status === 'pending'))
     && (!q || [l.name, l.phone, l.email, l.id, l.attr.campaign, l.attr.adset, l.attr.ad, ...(l.tags || [])].join(' ').toLowerCase().includes(q) || normPhone(q).length > 5 && normPhone(l.phone).includes(normPhone(q))))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -402,6 +411,7 @@ function tryStage(id, s) {
   if (m.length) return modal(`<h2>🔒 Can't move to "${s}" yet</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
   if (s === 'Closed Won') openCaseFor(l);
   if (s === 'Payment Received' || s === 'Closed Won' || s === 'Proposal Sent') l.followUp = s === 'Proposal Sent' ? (l.followUp || Date.now() + D) : null;
+  if (!back && l.email && S.email && ((s === 'Proposal Sent' && S.email.autoProposal) || (s === 'Payment Link Sent' && S.email.autoPayment))) { const t = S.emailTpl.find(x => x.id === (s === 'Proposal Sent' ? 'proposal' : 'payment')); const att = s === 'Proposal Sent' ? (l.proposals[l.proposals.length - 1] || {}).pdf || '' : ''; l.emails.push({ at: Date.now(), to: l.email, subject: fillTpl(t.subject, l), by: 'auto', att }); log(l, `Auto email: "${fillTpl(t.subject, l)}"${att ? ' + ' + att : ''}`, 'auto'); }
   log(l, `Stage changed ${l.stage} → ${s}${back ? ' (moved back)' : ''}`); l.stage = s; save(); render(); toast('Stage → ' + s);
 }
 function reasonModal(id, s) {
@@ -451,7 +461,7 @@ function leadPage() {
   <div class="dr-actions">
     <a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="setL('${l.id}','contact.call',true)">📞 Call</a>
     <button class="btn btn-sm" onclick="openChat('${l.id}')"><span style="color:var(--wa)">●</span> WhatsApp</button>
-    <a class="btn btn-sm" href="mailto:${esc(l.email)}" onclick="setL('${l.id}','contact.email',true)">✉ Email</a>
+    <button class="btn btn-sm" onclick="composeEmail('${l.id}')">✉ Email</button>
     <button class="btn btn-sm" onclick="proposalFor('${l.id}')">▤ Create proposal</button>
     <button class="btn btn-sm" onclick="document.getElementById('sec-fu').scrollIntoView({behavior:'smooth'})">⏰ Reminder</button>
     <button class="btn btn-ai btn-sm" onclick="runAI('${l.id}')">✨ AI next step</button>
@@ -525,7 +535,7 @@ function leadPage() {
     </div></div>
     ${nx && !isClosed ? `<div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:4px">Next: ${esc(nx)}</h3><div class="small muted" style="margin-bottom:8px">${nxCrit.filter(c => c[0]).length}/${nxCrit.length} criteria met</div><div class="bar" style="margin-bottom:10px"><i style="width:${nxCrit.length ? nxCrit.filter(c => c[0]).length / nxCrit.length * 100 : 100}%"></i></div><ul class="crit">${nxCrit.map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px" ${missing(l, nx).length ? 'disabled' : ''} onclick="tryStage('${l.id}','${nx}')">Move to ${esc(nx)} →</button></div></div>` : ''}
     <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">Contact</h3><ul class="crit">
-      <li class="${ci >= 1 ? 'ok' : ''}">${ci >= 1 ? '✓' : '○'} Contacted</li><li class="${l.contact.wa ? 'ok' : ''}">${l.contact.wa ? '✓' : '○'} WhatsApp sent</li><li class="${l.contact.call ? 'ok' : ''}">${l.contact.call ? '✓' : '○'} Called</li><li class="${l.contact.email ? 'ok' : ''}">${l.contact.email ? '✓' : '○'} Email sent</li><li class="${l.notes.length ? 'ok' : ''}">${l.notes.length ? '✓' : '○'} ${l.notes.length} note${l.notes.length === 1 ? '' : 's'}</li>
+      <li class="${ci >= 1 ? 'ok' : ''}">${ci >= 1 ? '✓' : '○'} Contacted</li><li class="${l.contact.wa ? 'ok' : ''}">${l.contact.wa ? '✓' : '○'} WhatsApp sent</li><li class="${l.contact.call ? 'ok' : ''}">${l.contact.call ? '✓' : '○'} Called</li><li class="${l.contact.email ? 'ok' : ''}">${l.contact.email ? '✓' : '○'} Email sent</li><li class="${l.notes.length ? 'ok' : ''}">${l.notes.length ? '✓' : '○'} ${l.notes.length} note${l.notes.length === 1 ? '' : 's'}</li><li class="${(l.emails || []).length ? 'ok' : ''}">${(l.emails || []).length ? '✓' : '○'} ${(l.emails || []).length} email(s) sent${(l.emails || []).length ? ' · last: ' + esc(l.emails[l.emails.length - 1].subject) : ''}</li>
     </ul><a class="btn btn-wa btn-sm" style="width:100%;justify-content:center;margin-top:10px" onclick="openChat('${l.id}')">💬 Open WhatsApp chat</a></div></div>
     <div class="card attr"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">📍 Source & tracking</h3><div class="kv1">${[['Platform', a.platform], ['Campaign', a.campaign], ['Ad set / group', a.adset], ['Ad name', a.ad], ['Form', a.form], ['Landing page', a.landing], ['utm_source', u.utm_source], ['utm_medium', u.utm_medium], ['utm_campaign', u.utm_campaign], ['utm_term', u.utm_term], ['utm_content', u.utm_content], ['Click ID', a.clickId]].map(([k, v]) => `<div><span>${k}</span><b class="${k.startsWith('utm') || k === 'Click ID' ? 'mono' : ''}">${esc(v || '—')}</b></div>`).join('')}</div>${(l.touches || []).length ? `<div class="small muted" style="margin-top:8px"><b>Merged touches:</b> ${l.touches.map(t => `${esc(t.source)} · ${esc(t.attr.campaign || '')}`).join(' · ')}</div>` : ''}</div></div>
   </div></div></div>`;
@@ -547,9 +557,9 @@ function sendPay(id) {
   const l = S.leads.find(x => x.id === id); const p = l.payment || {};
   const m = [[+p.amount > 0, 'Amount received'], [has(p.mode), 'Payment mode'], [has(p.ref), 'Reference / transaction code'], [has(p.date), 'Payment date']].filter(c => !c[0]).map(c => c[1]);
   if (m.length) return toast('Fill: ' + m.join(', '));
-  Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); save(); render(); toast('⏳ Sent to Accounts (Faisal) for confirmation');
+  Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); notify('u1', `💰 Confirm payment ${aed(p.amount)} · ref ${p.ref} · ${l.name}`, l.id); save(); render(); toast('⏳ Sent to Accounts (Faisal) for confirmation');
 }
-function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✅ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); if (PIPE.indexOf(l.stage) < PIPE.indexOf('Payment Received')) { log(l, `Stage changed ${l.stage} → Payment Received`, 'system'); l.stage = 'Payment Received'; l.followUp = null; } save(); render(); toast('✅ Payment confirmed — lead moved to Payment Received'); }
+function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✅ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); if (PIPE.indexOf(l.stage) < PIPE.indexOf('Payment Received')) { log(l, `Stage changed ${l.stage} → Payment Received`, 'system'); l.stage = 'Payment Received'; l.followUp = null; } notify(l.owner, `✅ Payment confirmed for ${l.name} — now a customer with Operations`, l.id); openCaseFor(l); save(); render(); toast('✅ Payment confirmed — lead moved to Payment Received & Customers'); }
 function rejectPay(id) { const n = prompt('Reason for rejecting (e.g. amount not received in bank)'); if (n === null) return; const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'rejected', rejectNote: n }); log(l, 'Payment rejected by Accounts: ' + n); save(); render(); }
 function addNote(id) { const l = S.leads.find(x => x.id === id); const t = $('noteIn').value.trim(); if (!t) return toast('Write a note first'); const isP = Object.values(POLISHED).includes(t) || (/^[A-Z]/.test(t) && /[.!?]$/.test(t)); l.notes.push({ by: ME.id, at: Date.now(), text: t, polished: isP }); log(l, 'Note added'); save(); render(); toast('Note saved'); }
 function polishNote(id, i) { const l = S.leads.find(x => x.id === id); l.notes[i].orig = l.notes[i].text; l.notes[i].text = polish(l.notes[i].text); l.notes[i].polished = true; log(l, 'Note polished to English by AI Agent', 'ai'); save(); render(); toast('✨ Note polished'); }
@@ -561,13 +571,15 @@ function tagModal(id) {
   modal(`<h2>Tags · ${esc(l.name)}</h2><div class="opts" style="margin-top:12px">${opts.map(t => `<label class="opt ${l.tags.includes(t) ? 'on' : ''}"><input type="checkbox" value="${t}" ${l.tags.includes(t) ? 'checked' : ''}> ${t} ${['Interested', 'Price asked', 'Hot lead'].includes(t) ? '<em>🤖 AI</em>' : ''}</label>`).join('')}</div><p class="small muted">🤖 tags switch on the AI Agent for this chat — it reads new WhatsApp messages and updates Hot/Warm/Cold and follow-up date.</p><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveTags('${id}')">Save</button></div>`);
 }
 function saveTags(id) { const l = S.leads.find(x => x.id === id); const keep = l.tags.filter(t => ['Duplicate', 'Re-enquired'].includes(t)); l.tags = keep.concat([...document.querySelectorAll('#modalBody input:checked')].map(i => i.value)); log(l, 'Tags updated: ' + l.tags.join(', ')); save(); closeModal(); render(); }
-function openCaseFor(l) {
+function openCaseFor(l, silent) {
   if (S.cases.some(c => c.leadId === l.id)) return;
   const ops = TEAM.filter(t => t.role === 'ops'); const owner = ops[(S.rrOps++) % ops.length].id;
   const docs = {}; DOCS.forEach(d => docs[d] = false);
-  const c = { id: 'C' + (3001 + S.cases.length + Math.floor(Math.random() * 100)), leadId: l.id, company: l.name.split(' ')[0] + ' ' + (l.req.activity || 'Trading').split(' ')[0] + (l.req.type === 'Mainland' ? ' LLC' : ' FZ-LLC'), stage: OPS_STAGES[0], owner, docs, zone: l.req.zone, visas: +l.req.visas || 0, startedAt: Date.now(), licenceNo: '', licenceExpiry: null, visaHolders: [], log: [{ at: Date.now(), by: 'system', text: `Case opened from ${l.id} (Closed Won by ${user(l.owner).name}) · assigned to ${user(owner).name}` }] };
-  S.cases.unshift(c); log(l, `Operations case ${c.id} opened → ${user(owner).name}`, 'system');
-  setTimeout(() => toast(`🗂️ Operations case ${c.id} created → ${user(owner).name}`), 1200);
+  const c = { id: 'C' + (3001 + S.cases.length + Math.floor(Math.random() * 100)), leadId: l.id, company: l.name.split(' ')[0] + ' ' + (l.req.activity || 'Trading').split(' ')[0] + (l.req.type === 'Mainland' ? ' LLC' : ' FZ-LLC'), stage: OPS_STAGES[0], owner, docs, zone: l.req.zone, visas: +l.req.visas || 0, startedAt: Date.now(), licenceNo: '', licenceExpiry: null, visaHolders: [], log: [{ at: Date.now(), by: 'system', text: `Case opened from ${l.id} (payment confirmed, sold by ${user(l.owner).name}) · assigned to ${user(owner).name}` }] };
+  S.cases.unshift(c); if (silent) return;
+  log(l, `Operations case ${c.id} opened → ${user(owner).name}`, 'system');
+  notify(owner, `🏢 New customer case ${c.id}: ${c.company} (paid ${l.payment ? aed(l.payment.amount) : ''})`, 'case:' + c.id); notify('u1', `🏢 ${l.name} is now a customer → ${user(owner).name} (Operations)`, 'case:' + c.id);
+  setTimeout(() => toast(`🗂️ Customer case ${c.id} created → ${user(owner).name}`), 1200);
 }
 function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadId: id, type: l.req.type || 'Free Zone', zone: has(l.req.zone) ? l.req.zone : S.zones.find(z => z.type === (l.req.type || 'Free Zone')).id, acts: 3, visas: +l.req.visas || 1, addons: ['medical'], disc: 0 }; drawer = null; go('calculator'); }
 
@@ -630,7 +642,7 @@ function dup0(phone) { const d = findDup(phone, ''); return d ? d.email : ''; }
 /* ---------------- WhatsApp ---------------- */
 function openChat(id) { waOpen = id; closeDrawer(); if (!S.chats[id]) S.chats[id] = []; go('whatsapp'); }
 function vWhatsApp() {
-  const L = visibleLeads().filter(l => S.chats[l.id]).sort((a, b) => (last(b).at || 0) - (last(a).at || 0));
+  const L = visibleLeads().filter(l => S.chats[l.id] && (!waTagF || l.tags.includes(waTagF))).sort((a, b) => (last(b).at || 0) - (last(a).at || 0));
   if (!waOpen || !L.find(l => l.id === waOpen)) waOpen = L[0] && L[0].id;
   const l = S.leads.find(x => x.id === waOpen);
   if (l) S.read[l.id] = Date.now();
@@ -638,8 +650,9 @@ function vWhatsApp() {
   const lastIn = [...msgs].reverse().find(m => m.from === 'in');
   const left = lastIn ? 24 * H - (Date.now() - lastIn.at) : -1;
   setTimeout(save, 0);
-  return `<div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
+  return `<div class="toolbar"><span class="small muted">Filter chats by tag:</span><button class="wtag ${!waTagF ? 'on' : ''}" style="border-color:var(--navy);${!waTagF ? 'background:var(--navy);color:#fff' : ''}" onclick="waTagF='';render()">All</button>${WA_TAGS.map(([t, c]) => `<button class="wtag ${waTagF === t ? 'on' : ''}" style="border-color:${c};${waTagF === t ? `background:${c};color:#fff` : `color:${c}`}" onclick="waTagF='${t}';render()">${t} · ${visibleLeads().filter(x => S.chats[x.id] && x.tags.includes(t)).length}</button>`).join('')}</div><div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div><div>${x.tags.filter(t => WA_TAGS.some(w => w[0] === t)).map(t => `<span class="wtag-mini" style="background:${WA_TAGS.find(w => w[0] === t)[1]}">${t}</span>`).join('')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
   <div class="wa-chat">${l ? `<div class="wa-ch">${av(l.owner, 34)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}</div></div><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, '')}">Open in WhatsApp ↗</a></div></div>
+    <div class="wa-tags"><span class="small muted">Tags:</span>${waTagChips(l)}</div>
     ${left > 0 ? `<div class="win24" style="background:var(--green-soft);color:var(--green)">🟢 24-hour window open · ${Math.floor(left / H)}h ${Math.floor(left % H / 60e3)}m left for free replies</div>` : `<div class="win24">⏱ 24-hour window closed — only Meta-approved templates can be sent</div>`}
     <div class="wa-msgs">${msgs.map(m => `<div class="msg ${m.from}">${esc(m.text)}<span class="t">${m.from === 'out' ? esc(user(m.by).name) + ' · ' : ''}${fmtDate(m.at)} ${m.from === 'out' ? '<span style="color:#34B7F1">✓✓</span>' : ''}</span></div>`).join('') || '<div class="empty">No messages yet — send a template to start</div>'}</div>
     <div class="wa-in"><select class="btn btn-sm" onchange="if(this.value){$('waIn').value=WA_TEMPLATES[this.value].text.replace('{name}','${esc(l.name.split(' ')[0])}');this.value=''}"><option value="">📋 Templates</option>${WA_TEMPLATES.map((t, i) => `<option value="${i}">${t.name}</option>`).join('')}</select>
@@ -747,29 +760,15 @@ function caseDrawer() {
       <div><label>Trade licence no.</label><input value="${esc(c.licenceNo)}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceNo',this.value)"></div>
       <div><label>Licence expiry</label><input type="date" value="${c.licenceExpiry ? new Date(c.licenceExpiry).toISOString().slice(0, 10) : ''}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceExpiry',new Date(this.value).getTime())"></div>
       <div><label>Jurisdiction</label><input value="${esc(z.name)} · ${esc(z.type)}" disabled></div><div><label>Visas in package</label><input value="${c.visas}" disabled></div></div>
-      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map(v => `<tr><td>${esc(v.name)}</td><td>${pill(v.status, v.status === 'Stamped' ? 'p-closed-won' : 'p-follow-up')}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map(v => `<tr><td>${esc(v.name)}</td><td>${canEdit ? `<button class="btn btn-sm" onclick="toggleVisa('${c.id}',${c.visaHolders.indexOf(v)})">${v.status === 'Stamped' ? '✅ Stamped' : '⏳ In process'}</button>` : pill(v.status, v.status === 'Stamped' ? 'p-closed-won' : 'p-follow-up')}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
     </div></div>
     <div class="card"><div class="card-h"><h2>🕑 Case log</h2></div><div class="card-b"><ul class="tl">${[...c.log].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
   </div>`;
-}
-function setOps(id, i) {
-  const c = S.cases.find(x => x.id === id);
-  if (i > 1 && DOCS.some(d => !c.docs[d])) return toast('📄 Complete all documents before moving past Documents Collected');
-  if (i >= 4 && !c.licenceNo && i > OPS_STAGES.indexOf(c.stage)) { c.licenceNo = zoneOf(c.zone).name.split(' ')[0].toUpperCase() + '-' + Math.floor(40000 + Math.random() * 9999); c.licenceExpiry = Date.now() + 365 * D; }
-  if (i >= 6 && !c.visaHolders.length) { const l = S.leads.find(x => x.id === c.leadId); c.visaHolders = [{ name: l ? l.name : 'Owner', status: i >= 7 ? 'Stamped' : 'In process', expiry: i >= 7 ? Date.now() + 730 * D : null }]; }
-  if (i >= 7) c.visaHolders.forEach(v => { v.status = 'Stamped'; v.expiry = v.expiry || Date.now() + 730 * D; });
-  c.log.push({ at: Date.now(), by: ME.id, text: `Stage → ${OPS_STAGES[i]}` }); c.stage = OPS_STAGES[i]; save(); render();
-  toast(i === 4 ? '🏛 Trade licence issued — client is now a Customer' : i === 8 ? '🎉 Setup completed!' : 'Stage → ' + OPS_STAGES[i]);
 }
 function toggleDoc(id, d) { const c = S.cases.find(x => x.id === id); c.docs[d] = !c.docs[d]; c.log.push({ at: Date.now(), by: ME.id, text: `${d} ${c.docs[d] ? 'received' : 'marked missing'}` }); save(); render(); }
 function caseSet(id, k, v) { const c = S.cases.find(x => x.id === id); c[k] = v; c.log.push({ at: Date.now(), by: ME.id, text: `${k === 'licenceNo' ? 'Licence no.' : 'Licence expiry'} updated` }); save(); render(); }
 function opsAssign(id, uid) { const c = S.cases.find(x => x.id === id); c.owner = uid; c.log.push({ at: Date.now(), by: ME.id, text: 'Assigned to ' + user(uid).name }); save(); render(); }
 
-function vCustomers() {
-  const cs = S.cases.filter(c => OPS_STAGES.indexOf(c.stage) >= 4);
-  return `<div class="card tbl-wrap"><div class="card-h"><h2>Customers</h2><span class="small muted">${cs.length} companies with trade licence issued</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Jurisdiction</th><th>Licence</th><th>Expiry</th><th>Status</th><th>Ops</th></tr></thead><tbody>
-  ${cs.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; return `<tr class="click" onclick="openCase('${c.id}')"><td><b>${esc(c.company)}</b><span class="sub">${c.id}</span></td><td>${esc(l.name || '')}<span class="sub">${esc(l.phone || '')}</span></td><td>${esc(zoneOf(c.zone).name)}</td><td class="mono">${esc(c.licenceNo)}</td><td>${c.licenceExpiry ? expiryPill(c.licenceExpiry) : '—'}</td><td>${pill(c.stage, c.stage === 'Setup Completed' ? 'p-closed-won' : 'p-qualified')}</td><td>${av(c.owner, 24)}</td></tr>`; }).join('') || '<tr><td colspan="7"><div class="empty">No customers yet</div></td></tr>'}</tbody></table></div>`;
-}
 function vRenewals() {
   const cs = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 90 * D).sort((a, b) => a.licenceExpiry - b.licenceExpiry);
   return `<div class="card tbl-wrap"><div class="card-h"><h2>Licence renewals · next 90 days</h2><span class="small muted">Alerts at 60, 30 and 7 days</span></div><table class="tbl"><thead><tr><th>Company</th><th>Licence</th><th>Expires</th><th>In</th><th></th></tr></thead><tbody>
@@ -779,7 +778,7 @@ function renew(id) { const c = S.cases.find(x => x.id === id); c.licenceExpiry =
 
 /* ---------------- settings ---------------- */
 function vSettings() {
-  const tabs = [['team', 'Team & roles'], ['integrations', 'Lead sources & integrations'], ['utm', 'UTM tester'], ['prices', 'Price list'], ['spend', 'Ad spend'], ['data', 'Data']];
+  const tabs = [['team', 'Team & roles'], ['assign', 'Round robin & notifications'], ['email', 'Email'], ['integrations', 'Lead sources & integrations'], ['utm', 'UTM tester'], ['prices', 'Price list'], ['spend', 'Ad spend'], ['data', 'Data']];
   let b = '';
   if (setTab === 'team') b = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Dashboard</th><th>Can do</th><th>Cannot do</th></tr></thead><tbody>${TEAM.map(t => `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 28)}<b>${esc(t.name)}</b></div></td><td>${esc(t.title)}</td><td>${t.role === 'admin' ? 'Company dashboard' : t.role === 'sales' ? 'Sales dashboard (own leads)' : 'Operations dashboard'}</td><td class="small">${t.role === 'admin' ? 'Everything: all leads, campaigns, ops, settings, delete, reassign' : t.role === 'sales' ? 'Own leads, follow-ups, WhatsApp, calculator & proposals, duplicates' : 'Ops board, documents, licences, visas, customers, renewals'}</td><td class="small">${t.role === 'admin' ? '—' : t.role === 'sales' ? "Other reps' leads, operations documents, delete" : 'Sales leads & campaigns, delete'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">Demo: 5 users. Live version uses email OTP login per user. New leads are split round-robin between sales; Closed Won cases round-robin between operations.</p>`;
   if (setTab === 'integrations') b = `<div class="int-grid">
@@ -791,6 +790,8 @@ function vSettings() {
     ${int('🧬 Duplicate check', 'Phone (last 9 digits) + email. Duplicate tagged, linked, assigned to same owner, original gets a Re-enquired note.', 'Rule: phone OR email', 'Active')}
   </div>
   <div class="card" style="margin-top:16px"><div class="card-h"><h2>Website UTM capture snippet</h2></div><div class="card-b"><div class="code">&lt;script&gt;(function(){var p=new URLSearchParams(location.search),k=['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid'];k.forEach(function(x){if(p.get(x))localStorage.setItem('qph_'+x,p.get(x))});if(!localStorage.qph_landing)localStorage.qph_landing=location.href;document.querySelectorAll('form').forEach(function(f){k.concat('landing').forEach(function(x){var i=document.createElement('input');i.type='hidden';i.name=x;i.value=localStorage.getItem('qph_'+x)||'';f.appendChild(i)})})})();&lt;/script&gt;</div><p class="small muted">Keeps the first-click UTM even if the visitor browses other pages before submitting the form.</p></div></div>`;
+  if (setTab === 'assign') b = assignSettings();
+  if (setTab === 'email') b = emailSettings();
   if (setTab === 'utm') b = `<div class="card"><div class="card-h"><h2>UTM tester</h2><span class="small muted">Paste any ad URL to see what the CRM will store</span></div><div class="card-b"><input class="inp" id="utmIn" value="https://quickpathhorizon.com/business-setup/?utm_source=facebook&utm_medium=paid_social&utm_campaign=qph_freezone_nov26&utm_term=uae_expats_25_45&utm_content=video_2_visa&fbclid=IwAR2xyz" oninput="utmTest()"><div id="utmOut" style="margin-top:14px"></div></div></div>`;
   if (setTab === 'prices') b = `<div class="card tbl-wrap"><div class="card-h"><h2>Free zone & authority price list (AED)</h2><span class="small muted">Used by the cost calculator · indicative demo values</span></div><table class="tbl price-tbl"><thead><tr><th>Zone</th><th>Type</th><th class="num">Licence</th><th class="num">Per visa</th><th class="num">Est. card</th><th class="num">Incl. activities</th><th class="num">Extra activity</th></tr></thead><tbody>${S.zones.map((z, i) => `<tr><td><b>${esc(z.name)}</b><span class="sub">${esc(z.emirate)}</span></td><td>${esc(z.type)}</td>${['licence', 'perVisa', 'estCard', 'inclActs', 'extraAct'].map(k => `<td class="num"><input type="number" value="${z[k]}" onchange="S.zones[${i}].${k}=+this.value;save()"></td>`).join('')}</tr>`).join('')}</tbody></table>
   <div class="card-b"><h3 style="font-size:14px;margin-bottom:8px">Add-ons & service fee</h3><table class="tbl price-tbl"><tbody>${S.addons.map((a, i) => `<tr><td>${esc(a.name)}</td><td class="sub">${a.per === 'visa' ? 'per visa' : 'one-time'}</td><td class="num"><input type="number" value="${a.price}" onchange="S.addons[${i}].price=+this.value;save()"></td></tr>`).join('')}<tr><td><b>QPH service fee</b></td><td></td><td class="num"><input type="number" value="${S.serviceFee}" onchange="S.serviceFee=+this.value;save()"></td></tr></tbody></table></div></div>`;
@@ -819,8 +820,161 @@ function alerts() {
   if (ME.role !== 'sales') S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < now + 60 * D).forEach(c => a.push(['🔁', `Licence renewal: ${c.company} (${Math.round((c.licenceExpiry - now) / D)}d)`, `openCase('${c.id}')`]));
   return a;
 }
-function alertsModal() { const a = alerts(); modal(`<h2>🔔 Alerts</h2><ul class="alerts">${a.map(([i, t, fn]) => `<li onclick="closeModal();${fn}"><span>${i}</span><span>${esc(t)}</span></li>`).join('') || '<li>All clear ✅</li>'}</ul><div class="modal-f"><button class="btn" onclick="closeModal()">Close</button></div>`); }
 function modal(h) { $('modalBody').innerHTML = h; $('modal').classList.add('open'); }
 function closeModal() { $('modal').classList.remove('open'); }
 
+/* ---------------- customers / accounts (operations only) ---------------- */
+function acctChecks(c) {
+  const vis = +c.visas || 0; const stamped = c.visaHolders.filter(v => v.status === 'Stamped').length;
+  return [[!!c.licenceNo, 'Trade licence issued'], [DOCS.every(d => c.docs[d]), 'All documents collected'], [vis === 0 || stamped >= vis, `All visas stamped (${Math.min(stamped, vis)}/${vis})`]];
+}
+const acctComplete = c => acctChecks(c).every(x => x[0]);
+function setOps(id, i) {
+  const c = S.cases.find(x => x.id === id); const l = S.leads.find(x => x.id === c.leadId);
+  if (i > 1 && DOCS.some(d => !c.docs[d])) return toast('📄 Complete all documents before moving past Documents Collected');
+  if (i >= 4 && !c.licenceNo && i > OPS_STAGES.indexOf(c.stage)) { c.licenceNo = zoneOf(c.zone).name.split(' ')[0].toUpperCase() + '-' + Math.floor(40000 + Math.random() * 9999); c.licenceExpiry = Date.now() + 365 * D; }
+  const n = +c.visas || 0;
+  if (i >= 6) for (let k = c.visaHolders.length; k < n; k++) c.visaHolders.push({ name: k === 0 && l ? l.name : (l ? l.name.split(' ')[0] : 'Client') + ' – Employee ' + k, status: 'In process', expiry: null });
+  if (i >= 7) c.visaHolders.forEach(v => { v.status = 'Stamped'; v.expiry = v.expiry || Date.now() + 730 * D; });
+  if (i === 8 && !acctComplete(c)) return modal(`<h2>🔒 Can't complete setup yet</h2><ul class="crit">${acctChecks(c).map(x => `<li class="${x[0] ? 'ok' : ''}">${x[0] ? '✅' : '⭕'} ${esc(x[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+  const wasDone = acctComplete(c) && c.stage === 'Setup Completed';
+  c.log.push({ at: Date.now(), by: ME.id, text: `Stage → ${OPS_STAGES[i]}` }); c.stage = OPS_STAGES[i]; save(); render();
+  if (i === 8 && !wasDone) { notify('u1', `✅ ${c.company} setup complete — moved to Accounts`, 'case:' + c.id); if (l) notify(l.owner, `🎉 Your client ${l.name} (${c.company}) setup is complete`, 'case:' + c.id); }
+  toast(i === 4 ? '🏛 Trade licence issued' : i === 8 ? '🎉 Setup completed — client moved to Accounts' : 'Stage → ' + OPS_STAGES[i]);
+}
+function toggleVisa(id, k) { const c = S.cases.find(x => x.id === id); const v = c.visaHolders[k]; v.status = v.status === 'Stamped' ? 'In process' : 'Stamped'; if (v.status === 'Stamped') v.expiry = v.expiry || Date.now() + 730 * D; c.log.push({ at: Date.now(), by: ME.id, text: `Visa ${v.name} → ${v.status}` }); save(); render(); }
+function caseRow(c, mode) {
+  const l = S.leads.find(x => x.id === c.leadId) || {}; const i = OPS_STAGES.indexOf(c.stage); const vis = +c.visas || 0; const st = c.visaHolders.filter(v => v.status === 'Stamped').length; const dn = DOCS.filter(d => c.docs[d]).length;
+  return `<tr class="click" onclick="openCase('${c.id}')"><td><b>${esc(c.company)}</b><span class="sub">${c.id} · ${esc(zoneOf(c.zone).name)}</span></td><td>${esc(l.name || '')}<span class="sub">${esc(l.phone || '')}</span></td>
+  ${mode === 'cust' ? `<td>${l.payment ? aed(l.payment.amount) + `<span class="sub">ref ${esc(l.payment.ref)}</span>` : '—'}</td><td>${pill(c.stage, i >= 4 ? 'p-qualified' : 'p-contacted')}<div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></td><td>${dn === DOCS.length ? '✅' : '📄'} ${dn}/${DOCS.length}</td><td>${vis ? (st >= vis ? '✅ ' : '') + st + '/' + vis : '—'}</td><td class="small muted">${ago(c.startedAt)}</td>`
+  : `<td class="mono">${esc(c.licenceNo)}</td><td>${c.licenceExpiry ? expiryPill(c.licenceExpiry) : '—'}</td><td>✅ ${st}/${vis}</td><td>✅ ${dn}/${DOCS.length}</td><td>${l.payment ? aed(l.payment.amount) : '—'}</td>`}<td>${av(c.owner, 24)}</td></tr>`;
+}
+function vCustomers() {
+  const cs = S.cases.filter(c => !acctComplete(c) || c.stage !== 'Setup Completed').sort((a, b) => b.startedAt - a.startedAt);
+  return `<div class="card" style="margin-bottom:14px"><div class="card-b small">🏢 <b>Customers</b> = qualified leads whose payment is <b>confirmed by Accounts</b>. From here the <b>Operations team</b> handles licence, documents and visas. When licence + all visas + all documents are complete and setup is marked completed, the client moves to <b>Accounts</b>. Sales staff cannot see this module.</div></div>
+  <div class="card tbl-wrap"><div class="card-h"><h2>Customers in progress</h2><span class="small muted">${cs.length} paid clients</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Payment</th><th>Ops stage</th><th>Documents</th><th>Visas stamped</th><th>Since</th><th>Ops</th></tr></thead><tbody>
+  ${cs.map(c => caseRow(c, 'cust')).join('') || '<tr><td colspan="8"><div class="empty">No customers in progress</div></td></tr>'}</tbody></table></div>`;
+}
+function vAccounts() {
+  const cs = S.cases.filter(c => acctComplete(c) && c.stage === 'Setup Completed');
+  const near = S.cases.filter(c => !(acctComplete(c) && c.stage === 'Setup Completed') && OPS_STAGES.indexOf(c.stage) >= 6).length;
+  return `<div class="card" style="margin-bottom:14px"><div class="card-b small">✅ <b>Accounts</b> = clients who have <b>paid</b>, have their <b>trade licence</b>, <b>all visas stamped</b> and <b>all documents complete</b>. Use it for renewals, VAT / Corporate Tax and upsell. ${near ? `<b>${near}</b> more client(s) are close (visa stage).` : ''}</div></div>
+  <div class="card tbl-wrap"><div class="card-h"><h2>Completed accounts</h2><span class="small muted">${cs.length} clients</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Licence no.</th><th>Licence expiry</th><th>Visas</th><th>Documents</th><th>Paid</th><th>Ops</th></tr></thead><tbody>
+  ${cs.map(c => caseRow(c, 'acct')).join('') || '<tr><td colspan="8"><div class="empty">No completed accounts yet</div></td></tr>'}</tbody></table></div>`;
+}
+
+/* ---------------- appointments ---------------- */
+function vAppointments() {
+  const L = visibleLeads().filter(l => l.appt && l.appt.at && !['Lost', 'Junk'].includes(l.stage)).sort((a, b) => a.appt.at - b.appt.at);
+  const sod = new Date().setHours(0, 0, 0, 0), eod = new Date().setHours(23, 59, 59, 999);
+  const days = [...Array(7)].map((_, k) => { const d = new Date(sod + k * D); const n = L.filter(l => new Date(l.appt.at).toDateString() === d.toDateString()).length; return `<div class="day ${k === 0 ? 'on' : ''}"><span>${d.toLocaleDateString('en-GB', { weekday: 'short' })}</span><b>${d.getDate()}</b><em>${n ? n + ' appt' : '—'}</em></div>`; }).join('');
+  const groups = [['📅 Today', L.filter(l => l.appt.at >= sod && l.appt.at <= eod)], ['🔜 Upcoming', L.filter(l => l.appt.at > eod)], ['⚠️ Past — update the outcome', L.filter(l => l.appt.at < sod && l.stage === 'Appointment Booked')]];
+  const row = l => { const first = l.name.split(' ')[0]; const msg = `Hi ${first}, reminder of your meeting with Quick Path Horizon on ${fmtDate(l.appt.at)} at ${l.appt.place}. See you soon!`; return `<li>${av(l.owner, 30)}<div style="flex:1;min-width:0"><b style="cursor:pointer" onclick="openLead('${l.id}')">${esc(l.name)}</b> ${pill(l.stage)}<div class="small muted">🕑 ${fmtDate(l.appt.at)} · 📍 ${esc(l.appt.place || '—')} · ${esc(l.req.activity || 'activity not set')} · ${esc(user(l.owner).name)}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="datetime-local" class="inp" style="width:auto;padding:5px 8px" value="${toInput(l.appt.at)}" title="Reschedule" onchange="setL('${l.id}','appt.at',new Date(this.value).getTime())"><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, msg)}" onclick="setL('${l.id}','contact.wa',true)">💬 Reminder</a><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button></div></li>`; };
+  return `<div class="days">${days}</div>
+  <div class="card" style="margin-bottom:14px"><div class="card-b small">A lead appears here when it is moved to <b>Appointment Booked</b> (needs date, time and place). After the meeting, open the lead and move it to <b>Qualified</b> or <b>Follow-up</b>.</div></div>
+  ${groups.map(([t, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>${t}</h2><span class="small muted">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain appt">${arr.map(row).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('')}`;
+}
+
+/* ---------------- notifications ---------------- */
+function notify(to, text, link) {
+  S.notifs = S.notifs || []; S.notifs.unshift({ id: Math.random().toString(36).slice(2), to, text, link, at: Date.now(), read: false }); S.notifs = S.notifs.slice(0, 300);
+  if (ME && to === ME.id) { setTimeout(() => toast('🔔 ' + text), 400); if (window.Notification && Notification.permission === 'granted') { try { new Notification('QPH CRM', { body: text, icon: 'logo.png' }); } catch (e) { } } }
+}
+const myNotifs = () => (S.notifs || []).filter(n => ME && n.to === ME.id);
+function openNotif(id) { const n = S.notifs.find(x => x.id === id); n.read = true; save(); closeModal(); if (!n.link) return render(); if (n.link.startsWith('case:')) { render(); openCase(n.link.slice(5)); } else openLead(n.link); }
+function markAllRead() { myNotifs().forEach(n => n.read = true); save(); closeModal(); render(); }
+function enableDesktop() { if (!window.Notification) return toast('This browser does not support notifications'); Notification.requestPermission().then(p => toast(p === 'granted' ? '✅ Desktop notifications on' : 'Notifications blocked in browser settings')); }
+function alertsModal() {
+  const N = myNotifs(); const a = alerts();
+  modal(`<h2>🔔 Notifications · ${esc(ME.name)}</h2><div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap"><button class="btn btn-sm" onclick="markAllRead()">Mark all read</button><button class="btn btn-sm" onclick="enableDesktop()">🖥 Enable desktop notifications</button></div>
+  <ul class="alerts">${N.slice(0, 25).map(n => `<li onclick="openNotif('${n.id}')" style="${n.read ? 'color:var(--muted)' : 'font-weight:600;background:#FFF8F2'}"><span>${n.read ? '○' : '🟠'}</span><span style="flex:1">${esc(n.text)}</span><span class="small muted" style="white-space:nowrap">${ago(n.at)}</span></li>`).join('') || '<li>No notifications yet</li>'}</ul>
+  ${a.length ? `<h3 style="font-size:14px;margin-top:18px">⚠️ Needs attention</h3><ul class="alerts">${a.map(([i, t, fn]) => `<li onclick="closeModal();${fn}"><span>${i}</span><span>${esc(t)}</span></li>`).join('')}</ul>` : ''}
+  <div class="modal-f"><button class="btn" onclick="closeModal()">Close</button></div>`);
+}
+
+/* ---------------- email ---------------- */
+const EMAIL_TPL = [
+  { id: 'welcome', name: 'Welcome', subject: 'Welcome to Quick Path Horizon, {name}', body: 'Hi {name},\n\nThank you for your enquiry about setting up your business in the UAE. I am {agent}, your dedicated consultant.\n\nCould you share a good time for a quick call? I will walk you through the best free zone / mainland options for your activity.\n\nBest regards,\n{agent}\nQuick Path Horizon · 0581464678' },
+  { id: 'proposal', name: 'Proposal', subject: 'Your UAE business setup proposal – {name}', body: 'Hi {name},\n\nPlease find attached your customised business setup proposal. The quote is valid for 7 days.\n\nLet me know if you have any questions.\n\nBest regards,\n{agent}\nQuick Path Horizon' },
+  { id: 'payment', name: 'Payment link', subject: 'Payment link to start your company setup', body: 'Hi {name},\n\nHere is your secure payment link: {paylink}\n\nOnce payment is confirmed, our operations team starts your application the same day.\n\nBest regards,\n{agent}' },
+  { id: 'docs', name: 'Documents required', subject: 'Documents needed for your application', body: 'Hi {name},\n\nTo start your application please send:\n• Passport copy\n• Photo with white background\n• Current visa / entry stamp\n• 3 trade name options\n\nBest regards,\n{agent}' },
+  { id: 'followup', name: 'Follow-up', subject: 'Following up on your business setup enquiry', body: 'Hi {name},\n\nJust following up on our conversation. Would you like me to share the 3 most cost-effective options for your business activity?\n\nBest regards,\n{agent}' },
+];
+function fillTpl(t, l) { return t.replace(/\{name\}/g, l.name.split(' ')[0]).replace(/\{agent\}/g, user(l.owner).name).replace(/\{paylink\}/g, (l.payLink && l.payLink.url) || 'https://pay.quickpathhorizon.com/' + l.id); }
+function composeEmail(id) {
+  const l = S.leads.find(x => x.id === id); if (!l.email) return toast('Add the lead email first');
+  const t = S.emailTpl[0];
+  modal(`<h2>✉ Send email</h2><div class="muted small">From ${esc(S.email.fromName)} &lt;${esc(S.email.fromEmail)}&gt; ${S.email.connected ? pill('connected', 'p-closed-won') : pill('demo mode', 'p-follow-up')}</div>
+  <div class="form"><div><label>To</label><input id="emTo" value="${esc(l.email)}"></div><div><label>Template</label><select id="emTpl" onchange="const t=S.emailTpl.find(x=>x.id===this.value);const l=S.leads.find(x=>x.id==='${id}');$('emSub').value=fillTpl(t.subject,l);$('emBody').value=fillTpl(t.body,l)">${S.emailTpl.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
+  <div class="full"><label>Subject</label><input id="emSub" value="${esc(fillTpl(t.subject, l))}"></div><div class="full"><label>Message</label><textarea id="emBody" style="min-height:200px">${esc(fillTpl(t.body, l))}</textarea></div>
+  ${l.proposals.length ? `<div class="full"><label class="opt"><input type="checkbox" id="emAtt" checked> Attach latest proposal PDF (${esc(l.proposals[l.proposals.length - 1].pdf || '')})</label></div>` : ''}</div>
+  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><a class="btn" href="mailto:${esc(l.email)}" onclick="this.href='mailto:'+encodeURIComponent($('emTo').value)+'?subject='+encodeURIComponent($('emSub').value)+'&body='+encodeURIComponent($('emBody').value)">Open in Mail app</a><button class="btn btn-primary" onclick="sendEmail('${id}')">Send email</button></div>`);
+}
+function sendEmail(id) {
+  const l = S.leads.find(x => x.id === id); const sub = $('emSub').value.trim(); if (!sub) return toast('Subject is required');
+  const att = $('emAtt') && $('emAtt').checked ? l.proposals[l.proposals.length - 1].pdf : '';
+  l.emails = l.emails || []; l.emails.push({ at: Date.now(), to: $('emTo').value, subject: sub, by: ME.id, att });
+  l.contact.email = true; log(l, `Email sent: "${sub}"${att ? ' + ' + att : ''} → ${$('emTo').value}`); save(); closeModal(); render();
+  toast(S.email.connected ? `📧 Email sent to ${l.email}` : `📧 Email logged (demo — connect email in Settings to deliver)`);
+}
+const EMAIL_PROVIDERS = { 'Gmail / Google Workspace': ['smtp.gmail.com', 587], 'Microsoft 365 / Outlook': ['smtp.office365.com', 587], 'Zoho Mail': ['smtp.zoho.com', 587], 'Custom SMTP': ['', 587] };
+function emailSettings() {
+  const e = S.email; const f = (k, label, type = 'text') => `<div><label>${label}</label><input type="${type}" value="${esc(e[k] ?? '')}" onchange="S.email.${k}=this.value;S.email.connected=false;save();render()"></div>`;
+  const tg = (k, label) => `<label class="opt ${e[k] ? 'on' : ''}"><input type="checkbox" ${e[k] ? 'checked' : ''} onchange="S.email.${k}=this.checked;save();render()"> ${label}</label>`;
+  return `<div class="grid2"><div class="card"><div class="card-h"><h2>📧 Email account</h2>${e.connected ? pill('Connected (demo)', 'p-closed-won') : pill('Not connected', 'p-follow-up')}</div><div class="card-b"><div class="form" style="margin:0">
+    <div class="full"><label>Provider</label><select onchange="S.email.provider=this.value;S.email.host=EMAIL_PROVIDERS[this.value][0];S.email.port=EMAIL_PROVIDERS[this.value][1];S.email.connected=false;save();render()">${Object.keys(EMAIL_PROVIDERS).map(p => `<option ${e.provider === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+    ${f('fromName', 'From name')}${f('fromEmail', 'From email', 'email')}${f('host', 'SMTP host')}${f('port', 'Port', 'number')}${f('user', 'Username', 'email')}
+    <div><label>App password</label><input type="password" placeholder="Not stored in demo" autocomplete="off"></div>${f('replyTo', 'Reply-to (optional)', 'email')}
+  </div><button class="btn btn-primary" style="margin-top:14px" onclick="toast('Testing connection…');setTimeout(()=>{S.email.connected=true;save();render();toast('✅ Connected (demo — real sending needs the live server)')},900)">Save & test connection</button>
+  <p class="small muted">Live version sends through your mailbox (Gmail / Outlook app password or SMTP), so customers receive emails from ${esc(e.fromEmail)} and replies land in your inbox.</p></div></div>
+  <div class="card"><div class="card-h"><h2>Automatic emails</h2></div><div class="card-b" style="display:grid;gap:8px">
+    ${tg('autoWelcome', 'Send <b>Welcome</b> email automatically to every new lead with an email')}${tg('autoProposal', 'Email the proposal PDF to the customer when stage → Proposal Sent')}${tg('autoPayment', 'Email the payment link when stage → Payment Link Sent')}${tg('staffAlerts', 'Email the assigned salesperson when a new lead is assigned')}
+  </div></div></div>
+  <div class="card"><div class="card-h"><h2>Email templates</h2><span class="small muted">{name} {agent} {paylink} are filled automatically</span></div><div class="card-b" style="display:grid;gap:14px">${S.emailTpl.map((t, i) => `<div><b>${esc(t.name)}</b><input class="inp" style="margin:6px 0" value="${esc(t.subject)}" onchange="S.emailTpl[${i}].subject=this.value;save()"><textarea class="inp" style="min-height:110px" onchange="S.emailTpl[${i}].body=this.value;save()">${esc(t.body)}</textarea></div>`).join('')}</div></div>`;
+}
+function assignSettings() {
+  const sales = TEAM.filter(t => t.role === 'sales'); const mem = S.rrMembers; const nextU = mem.length ? mem[S.rr % mem.length] : null;
+  const today = id => S.leads.filter(l => l.owner === id && new Date(l.createdAt).toDateString() === new Date().toDateString()).length;
+  return `<div class="grid2"><div class="card"><div class="card-h"><h2>🔄 Round robin — sales</h2>${nextU ? pill('Next lead → ' + user(nextU).name, 'p-qualified') : pill('Nobody active', 'p-lost')}</div><div class="card-b">
+    <p class="small muted" style="margin-top:0">Every new lead (Meta, Google, Website, WhatsApp) goes to the next active salesperson in turn. Duplicates go to the original owner.</p>
+    ${sales.map(t => `<label class="opt ${mem.includes(t.id) ? 'on' : ''}" style="margin-bottom:8px"><input type="checkbox" ${mem.includes(t.id) ? 'checked' : ''} onchange="S.rrMembers=this.checked?[...S.rrMembers,'${t.id}']:S.rrMembers.filter(x=>x!=='${t.id}');save();render()"> ${av(t.id, 24)} <b>${esc(t.name)}</b> — receives new leads <em>${today(t.id)} today · ${S.leads.filter(l => l.owner === t.id && l.stage === 'New').length} new open</em></label>`).join('')}
+    <p class="small muted">Untick someone on leave — their share goes to the others automatically.</p></div></div>
+  <div class="card"><div class="card-h"><h2>🔔 Who gets notified</h2></div><div class="card-b"><ul class="crit">
+    <li class="ok">✅ New lead → assigned salesperson + Admin</li><li class="ok">✅ Duplicate lead → original owner + Admin</li><li class="ok">✅ Payment sent for confirmation → Accounts (Admin)</li><li class="ok">✅ Payment confirmed → salesperson; new customer case → Operations (round robin Sara / Imran)</li><li class="ok">✅ Setup completed → Admin + salesperson</li>
+  </ul><p class="small muted">Notifications show in the 🔔 bell for each user, as a pop-up, and as desktop notifications (bell → Enable). ${S.email.staffAlerts ? 'Staff email alerts are ON.' : 'Staff email alerts are OFF (Settings → Email).'}</p></div></div></div>`;
+}
+
+/* ---------------- WhatsApp tags ---------------- */
+const WA_TAGS = [['Qualified', '#1E9E55'], ['Interested', '#2F6FB3'], ['Hot lead', '#D64545'], ['Price asked', '#C9820A'], ['Follow-up', '#6B4FBB'], ['Not interested', '#5A6B7D'], ['Junk', '#B42318']];
+let waTagF = '';
+function waTagChips(l) { return WA_TAGS.map(([t, c]) => { const on = l.tags.includes(t); return `<button class="wtag ${on ? 'on' : ''}" style="border-color:${c};${on ? `background:${c};color:#fff` : `color:${c}`}" onclick="waTag('${l.id}','${t}')">${on ? '✓ ' : ''}${t}</button>`; }).join(''); }
+function waTag(id, t) {
+  const l = S.leads.find(x => x.id === id); const on = l.tags.includes(t);
+  l.tags = on ? l.tags.filter(x => x !== t) : [...l.tags, t]; log(l, `WhatsApp tag ${on ? 'removed' : 'added'}: ${t}`); save(); render();
+  if (on) return;
+  if (t === 'Junk' && l.stage !== 'Junk') reasonModal(id, 'Junk');
+  else if (t === 'Qualified' && PIPE.indexOf(l.stage) < PIPE.indexOf('Qualified')) tryStage(id, 'Qualified');
+  else if (t === 'Follow-up' && !l.followUp) toast('Tagged Follow-up — set the follow-up date on the lead');
+  else toast('Tag added: ' + t);
+}
+
+/* ---------------- migrate / defaults ---------------- */
+function migrate() {
+  S.notifs = S.notifs || []; S.rrMembers = S.rrMembers || TEAM.filter(t => t.role === 'sales').map(t => t.id);
+  S.email = S.email || { provider: 'Gmail / Google Workspace', fromName: 'Quick Path Horizon', fromEmail: 'info@quickpathhorizon.com', host: 'smtp.gmail.com', port: 587, user: '', replyTo: '', connected: false, autoWelcome: true, autoProposal: true, autoPayment: false, staffAlerts: true };
+  S.emailTpl = S.emailTpl || JSON.parse(JSON.stringify(EMAIL_TPL));
+  S.leads.forEach(l => { l.emails = l.emails || []; l.contact = l.contact || {}; l.appt = l.appt || {}; });
+  S.leads.filter(l => l.payment && l.payment.status === 'confirmed').forEach(l => openCaseFor(l, true));
+  if (!S.notifs.length) {
+    const push = (to, text, link, at) => S.notifs.push({ id: Math.random().toString(36).slice(2), to, text, link, at, read: false });
+    [...S.leads].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).forEach(l => { push(l.owner, `🆕 New ${l.source} lead assigned to you: ${l.name}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : ''}`, l.id, l.createdAt); push('u1', `🆕 New ${l.source} lead ${l.name} → ${user(l.owner).name}`, l.id, l.createdAt); });
+    S.cases.slice(0, 5).forEach(c => push(c.owner, `🏢 New customer case ${c.id}: ${c.company}`, 'case:' + c.id, c.startedAt));
+    S.leads.filter(l => l.payment && l.payment.status === 'pending').forEach(l => push('u1', `💰 Confirm payment ${aed(l.payment.amount)} · ref ${l.payment.ref} · ${l.name}`, l.id, l.payment.sentAt));
+    S.notifs.sort((a, b) => b.at - a.at);
+  }
+  save();
+}
+
+
+migrate();
 boot();
