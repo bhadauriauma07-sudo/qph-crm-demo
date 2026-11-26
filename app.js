@@ -409,11 +409,25 @@ function tryStage(id, s) {
   if (s === 'Lost' || s === 'Junk') return reasonModal(id, s);
   const m = back ? [] : missing(l, s);
   if (m.length) return modal(`<h2>🔒 Can't move to "${s}" yet</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
+  moveStage(l, s, back ? 'back' : ''); save(); render(); toast('Stage → ' + s);
+}
+function moveStage(l, s, how) {
+  const back = how === 'back';
   if (s === 'Closed Won') openCaseFor(l);
   if (s === 'Payment Received' || s === 'Closed Won' || s === 'Proposal Sent') l.followUp = s === 'Proposal Sent' ? (l.followUp || Date.now() + D) : null;
   if (!back && l.email && S.email && ((s === 'Proposal Sent' && S.email.autoProposal) || (s === 'Payment Link Sent' && S.email.autoPayment))) { const t = S.emailTpl.find(x => x.id === (s === 'Proposal Sent' ? 'proposal' : 'payment')); const att = s === 'Proposal Sent' ? (l.proposals[l.proposals.length - 1] || {}).pdf || '' : ''; l.emails.push({ at: Date.now(), to: l.email, subject: fillTpl(t.subject, l), by: 'auto', att }); log(l, `Auto email: "${fillTpl(t.subject, l)}"${att ? ' + ' + att : ''}`, 'auto'); }
-  log(l, `Stage changed ${l.stage} → ${s}${back ? ' (moved back)' : ''}`); l.stage = s; save(); render(); toast('Stage → ' + s);
+  log(l, `Stage changed ${l.stage} → ${s}${back ? ' (moved back)' : how === 'auto' ? ' (auto — details complete)' : ''}`, how === 'auto' ? 'system' : undefined); l.stage = s;
 }
+/* Auto-advance: as soon as the details for a later stage are filled, the lead moves there by itself (never backwards, never to Closed Won / Lost / Junk). */
+const AUTO_TOP = PIPE.indexOf('Payment Received');
+function autoAdvance(l) {
+  if (['Lost', 'Junk', 'Closed Won'].includes(l.stage)) return null;
+  const cur = l.stage === 'Not Contacted' ? 0 : PIPE.indexOf(l.stage);
+  for (let i = AUTO_TOP; i > cur; i--) { const s = PIPE[i]; if (!missing(l, s).length) { const from = l.stage; moveStage(l, s, 'auto'); return [from, s]; } }
+  if (l.stage === 'New' && !missing(l, 'Not Contacted').length) { moveStage(l, 'Not Contacted', 'auto'); return ['New', 'Not Contacted']; }
+  return null;
+}
+function autoToast(r) { if (r) setTimeout(() => toast(`✅ Auto-moved ${r[0]} → <b>${r[1]}</b>`), 50); }
 function reasonModal(id, s) {
   const l = S.leads.find(x => x.id === id);
   modal(`<h2>Mark ${s}</h2><div class="muted small">${esc(l.name)}</div><div class="form"><div class="full"><label>Reason (required)</label><select id="rsn"><option value="">Select…</option>${LOST_REASONS.map(r => `<option>${r}</option>`).join('')}</select></div></div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="if(!$('rsn').value)return toast('Pick a reason');const l=S.leads.find(x=>x.id==='${id}');l.reason=$('rsn').value;l.followUp=null;log(l,'Stage changed '+l.stage+' → ${s} · '+l.reason);l.stage='${s}';save();closeModal();render();toast('Marked ${s}')">Mark ${s}</button></div>`);
@@ -432,7 +446,9 @@ function setL(id, path, val) {
   if (path === 'req.type') { const z = S.zones.find(z => z.type === val); l.req.zone = val === 'Free Zone' ? '' : (z ? z.id : ''); }
   if (path === 'phone' || path === 'email') { const d = findDup(l.phone, l.email, l.id); if (d && !l.dupOf && d.id !== l.id) { l.dupOf = d.id; l.tags.push('Duplicate'); toast('⚠ Already exists on ' + d.id + ' — tagged Duplicate'); } }
   if (path.startsWith('req.') && has(l.req.zone)) l.value = estimate({ zone: l.req.zone, visas: l.req.visas, acts: 3, addons: ['medical'] }).total;
-  if (String(old ?? '') !== String(val ?? '')) log(l, `${path.replace('req.', '').replace('appt.', 'appointment ').replace('contact.', '')} → ${typeof val === 'boolean' ? (val ? 'yes' : 'no') : (/At$|^followUp$|appt\.at/.test(path) && val ? fmtDate(val) : val)}`);
+  const changed = String(old ?? '') !== String(val ?? '');
+  if (changed) log(l, `${path.replace('req.', '').replace('appt.', 'appointment ').replace('contact.', '')} → ${typeof val === 'boolean' ? (val ? 'yes' : 'no') : (/At$|^followUp$|appt\.at/.test(path) && val ? fmtDate(val) : val)}`);
+  if (changed) autoToast(autoAdvance(l));
   save(); render();
 }
 function inp(l, path, type = 'text', extra = '') { const v = path.split('.').reduce((o, k) => (o || {})[k], l); const val = type === 'datetime-local' ? (v ? toInput(v) : '') : (v ?? ''); const conv = type === 'datetime-local' ? 'this.value?new Date(this.value).getTime():null' : type === 'number' ? "this.value===''?'':+this.value" : 'this.value'; return `<input type="${type}" value="${esc(val)}" ${extra} onchange="setL('${l.id}','${path}',${conv})">`; }
@@ -468,7 +484,7 @@ function leadPage() {
     <span style="flex:1"></span>
     ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">🗑 Delete</button>` : ''}
   </div>
-  <div class="pipe">${PIPE.map((s, i) => { const done = !isClosed && ci > i; const cur = l.stage === s; const lock = !done && !cur && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''} ${lock ? 'lock' : ''}" onclick="tryStage('${l.id}','${s}')" title="${lock ? 'Locked — needs: ' + esc(missing(l, s).join(', ')) : s}">${lock ? '🔒 ' : done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
+  <div class="pipe">${PIPE.map((s, i) => { const side = s === 'Follow-up' || s === 'Appointment Booked'; const done = !isClosed && ci > i && (!side || !missing(l, s).length); const skipped = !isClosed && ci > i && !done; const cur = l.stage === s; const lock = !done && !cur && !skipped && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''} ${lock ? 'lock' : ''}" onclick="tryStage('${l.id}','${s}')" title="${lock ? 'Locked — needs: ' + esc(missing(l, s).join(', ')) : s}">${lock ? '🔒 ' : done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
   ${isClosed ? `<div class="dup-box"><b>${esc(l.stage)}</b><span>Reason: ${esc(l.reason)}</span><button class="btn btn-sm" onclick="tryStage('${l.id}','New')">Re-open as New</button></div>` : ''}
 
   <div class="lp-grid"><div class="lp-main">
@@ -544,7 +560,7 @@ function leadPage() {
 function uploadPdf(id, input) {
   const f = input.files[0]; if (!f) return; if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) return toast('Please upload a PDF file');
   const l = S.leads.find(x => x.id === id);
-  const done = data => { l.proposals.push({ id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: l.req.zone || S.zones[0].id, total: l.value, visas: +l.req.visas || 0, pdf: f.name, uploaded: true, data }); log(l, `Proposal PDF uploaded: ${f.name}`); save(); render(); toast('📄 PDF attached — Proposal Sent is unlocked'); };
+  const done = data => { l.proposals.push({ id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: l.req.zone || S.zones[0].id, total: l.value, visas: +l.req.visas || 0, pdf: f.name, uploaded: true, data }); log(l, `Proposal PDF uploaded: ${f.name}`); const r = autoAdvance(l); save(); render(); toast(r ? `📄 PDF attached — auto-moved to <b>${r[1]}</b>` : '📄 PDF attached — fill the qualification details to move to Proposal Sent'); };
   if (f.size < 400e3) { const r = new FileReader(); r.onload = () => done(r.result); r.readAsDataURL(f); } else done(null);
 }
 function viewProposal(id, i) {
@@ -559,7 +575,7 @@ function sendPay(id) {
   if (m.length) return toast('Fill: ' + m.join(', '));
   Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); notify('u1', `💰 Confirm payment ${aed(p.amount)} · ref ${p.ref} · ${l.name}`, l.id); save(); render(); toast('⏳ Sent to Accounts (Faisal) for confirmation');
 }
-function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✅ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); if (PIPE.indexOf(l.stage) < PIPE.indexOf('Payment Received')) { log(l, `Stage changed ${l.stage} → Payment Received`, 'system'); l.stage = 'Payment Received'; l.followUp = null; } notify(l.owner, `✅ Payment confirmed for ${l.name} — now a customer with Operations`, l.id); openCaseFor(l); save(); render(); toast('✅ Payment confirmed — lead moved to Payment Received & Customers'); }
+function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✅ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); autoAdvance(l); l.followUp = null; notify(l.owner, `✅ Payment confirmed for ${l.name} — now a customer with Operations`, l.id); openCaseFor(l); save(); render(); toast('✅ Payment confirmed — lead moved to Payment Received & Customers'); }
 function rejectPay(id) { const n = prompt('Reason for rejecting (e.g. amount not received in bank)'); if (n === null) return; const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'rejected', rejectNote: n }); log(l, 'Payment rejected by Accounts: ' + n); save(); render(); }
 function addNote(id) { const l = S.leads.find(x => x.id === id); const t = $('noteIn').value.trim(); if (!t) return toast('Write a note first'); const isP = Object.values(POLISHED).includes(t) || (/^[A-Z]/.test(t) && /[.!?]$/.test(t)); l.notes.push({ by: ME.id, at: Date.now(), text: t, polished: isP }); log(l, 'Note added'); save(); render(); toast('Note saved'); }
 function polishNote(id, i) { const l = S.leads.find(x => x.id === id); l.notes[i].orig = l.notes[i].text; l.notes[i].text = polish(l.notes[i].text); l.notes[i].polished = true; log(l, 'Note polished to English by AI Agent', 'ai'); save(); render(); toast('✨ Note polished'); }
@@ -666,8 +682,7 @@ function last(l) { const c = S.chats[l.id] || []; return c[c.length - 1] || {}; 
 function waSend(id) {
   const t = $('waIn').value.trim(); if (!t) return; const l = S.leads.find(x => x.id === id);
   S.chats[id].push({ from: 'out', text: t, at: Date.now(), by: ME.id });
-  if (l.stage === 'New') { log(l, 'Stage changed New → Contacted (WhatsApp reply)', 'system'); l.stage = 'Contacted'; }
-  log(l, 'WhatsApp message sent'); save(); render();
+  log(l, 'WhatsApp message sent'); if (!l.contact.wa) { l.contact.wa = true; autoToast(autoAdvance(l)); } save(); render();
   setTimeout(() => { const replies = ['Thank you! Please share the details.', 'Ok, can we talk tomorrow at 11?', 'Is the visa cost included in this?', 'Great, I will send my passport copy.']; S.chats[id].push({ from: 'in', text: replies[Math.floor(Math.random() * replies.length)], at: Date.now() }); save(); if (route === 'whatsapp') render(); }, 2500);
 }
 
@@ -709,9 +724,8 @@ function saveProposal() {
   const pid = 'P' + (2100 + Math.floor(Math.random() * 900)); const p = { id: pid, at: Date.now(), zone: C.zone, total: e.total, visas: e.visas, pdf: 'QPH-Proposal-' + pid + '.pdf', snap: Object.assign({}, C) };
   l.proposals.push(p); l.value = e.total; l.req.zone = C.zone; l.req.type = C.type; l.req.visas = e.visas;
   log(l, `Proposal ${p.id} created · ${e.z.name} · ${aed(e.total)}`);
-  const before = PIPE.indexOf(l.stage) < PIPE.indexOf('Proposal Sent') && !missing(l, 'Proposal Sent').length;
-  if (before) { log(l, `Stage changed ${l.stage} → Proposal Sent`); l.stage = 'Proposal Sent'; l.followUp = Date.now() + D; }
-  save(); render(); toast(`💾 Proposal ${p.id} (PDF) saved to ${l.name}${before ? ' · stage → Proposal Sent' : missing(l, 'Proposal Sent').length ? ' · qualify the lead first to move to Proposal Sent' : ''}`);
+  const r = autoAdvance(l); const before = !!r;
+  save(); render(); toast(`💾 Proposal ${p.id} (PDF) saved to ${l.name}${before ? ' · auto-moved to ' + r[1] : missing(l, 'Proposal Sent').length ? ' · qualify the lead first to move to Proposal Sent' : ''}`);
 }
 function printQuote() {
   const e = estimate(C); const l = S.leads.find(x => x.id === C.leadId); const pa = $('printArea'); pa.hidden = false;
