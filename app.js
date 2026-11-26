@@ -324,14 +324,14 @@ function vLeads() {
     <label class="btn btn-sm" style="cursor:pointer"><input type="checkbox" ${leadFilter.dup ? 'checked' : ''} onchange="setF('dup',this.checked)"> Duplicates only</label>
     ${Object.values(leadFilter).some(Boolean) ? `<button class="btn btn-sm" onclick="filterGo({})">Clear</button>` : ''}
     <span class="count">${L.length} of ${all.length} leads</span>
-    <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>${vmToggle('leads')}
   </div>
-  <div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Lead</th><th>Source · Campaign › Ad set › Ad</th><th>Stage</th><th>Temp</th>${ME.role === 'admin' ? '<th>Owner</th>' : ''}<th>Follow-up</th><th>Created</th></tr></thead><tbody>
+  ${vmOf('leads') === 'grid' ? `<div class="cards">${L.map(l => leadCard(l, OPEN_STAGES.includes(l.stage) && l.followUp ? '⏰ ' + fmtDate(l.followUp) : '')).join('') || '<div class="empty">No leads match</div>'}</div>` : `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Lead</th><th>Source · Campaign › Ad set › Ad</th><th>Stage</th><th>Temp</th>${ME.role === 'admin' ? '<th>Owner</th>' : ''}<th>Follow-up</th><th>Created</th></tr></thead><tbody>
   ${L.map(l => `<tr class="click ${l.dupOf ? 'dup' : ''}" onclick="openLead('${l.id}')">
     <td><b>${esc(l.name)}</b><span class="sub">${esc(l.phone)} · ${l.id}</span>${l.dupOf ? ' ' + pill('Duplicate of ' + l.dupOf, 'p-dup') : ''}${dupsOf(l.id).length ? ' ' + pill('Re-enquired ×' + dupsOf(l.id).length, 'p-follow-up') : ''}</td>
     <td>${pill(l.source)} <span class="small">${esc(l.attr.platform || '')}</span><span class="sub">${esc(l.attr.campaign && l.attr.campaign !== '(none)' ? l.attr.campaign : '')}</span>${l.attr.adset ? `<span class="sub">› ${esc(l.attr.adset)} › ${esc(l.attr.ad)}</span>` : ''}</td>
     <td>${pill(l.stage)}</td><td>${pill(l.temp)}</td>${ME.role === 'admin' ? `<td>${av(l.owner, 24)}</td>` : ''}<td>${OPEN_STAGES.includes(l.stage) ? fu(l.followUp) : ''}</td><td class="small muted">${ago(l.createdAt)}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">No leads match</div></td></tr>`}
-  </tbody></table></div>`;
+  </tbody></table></div>`}`;
 }
 function exportCSV() {
   const L = filteredLeads();
@@ -340,13 +340,6 @@ function exportCSV() {
   const csv = [cols, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'qph-leads.csv'; a.click();
   toast('Exported ' + L.length + ' leads with UTM columns');
-}
-
-function vFollowups() {
-  const L = visibleLeads().filter(l => l.followUp && OPEN_STAGES.includes(l.stage));
-  const now = Date.now(), eod = new Date().setHours(23, 59, 59);
-  const grp = [['🔴 Overdue', L.filter(l => l.followUp < now)], ['🟠 Today', L.filter(l => l.followUp >= now && l.followUp <= eod)], ['🔵 Upcoming', L.filter(l => l.followUp > eod)]];
-  return grp.map(([t, arr]) => `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.sort((a, b) => a.followUp - b.followUp).map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.notes.length ? '· ' + esc((l.notes[l.notes.length - 1].text).slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><a class="btn btn-sm btn-wa" onclick="event.stopPropagation();openChat('${l.id}')">WhatsApp</a><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
 }
 
 /* ---------------- duplicates ---------------- */
@@ -518,7 +511,8 @@ function leadPage() {
     <div class="card" id="sec-fu"><div class="card-h"><h2>3 · Follow-up & appointment</h2><span class="small muted">Unlocks: Follow-up · Appointment Booked</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
       <div>${req('Follow-up date & time', has(l.followUp) || undefined)}${inp(l, 'followUp', 'datetime-local')}</div>
       <div>${req('Appointment date & time')}${inp(l, 'appt.at', 'datetime-local')}</div>
-      <div>${req('Meeting place')}${sel(l, 'appt.place', ['QPH Office, Dubai', 'Zoom / Google Meet', 'Client location'])}</div>
+      <div>${req('Meeting type / place')}${sel(l, 'appt.place', MEET_TYPES.map(t => t[2]))}</div>
+      <div class="full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn-sm btn-navy" onclick="apptModal('${l.id}')">📅 Schedule meeting & send invite</button>${l.appt && l.appt.link ? `<span class="small">Link: <a href="${esc(l.appt.link)}" target="_blank">${esc(l.appt.link)}</a></span>` : '<span class="small muted">Creates a Zoom / Google Meet link and sends it by email + WhatsApp</span>'}</div>
     </div></div></div>
 
     <div class="card"><div class="card-h"><h2>4 · Proposal</h2><span class="small muted">Unlocks: Proposal Sent — PDF required</span></div><div class="card-b">
@@ -666,7 +660,7 @@ function vWhatsApp() {
   const lastIn = [...msgs].reverse().find(m => m.from === 'in');
   const left = lastIn ? 24 * H - (Date.now() - lastIn.at) : -1;
   setTimeout(save, 0);
-  return `<div class="toolbar"><span class="small muted">Filter chats by tag:</span><button class="wtag ${!waTagF ? 'on' : ''}" style="border-color:var(--navy);${!waTagF ? 'background:var(--navy);color:#fff' : ''}" onclick="waTagF='';render()">All</button>${WA_TAGS.map(([t, c]) => `<button class="wtag ${waTagF === t ? 'on' : ''}" style="border-color:${c};${waTagF === t ? `background:${c};color:#fff` : `color:${c}`}" onclick="waTagF='${t}';render()">${t} · ${visibleLeads().filter(x => S.chats[x.id] && x.tags.includes(t)).length}</button>`).join('')}</div><div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div><div>${x.tags.filter(t => WA_TAGS.some(w => w[0] === t)).map(t => `<span class="wtag-mini" style="background:${WA_TAGS.find(w => w[0] === t)[1]}">${t}</span>`).join('')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
+  return `<div class="toolbar"><span class="small muted">Filter chats by tag:</span><button class="wtag ${!waTagF ? 'on' : ''}" onclick="waTagF='';render()">All</button>${WA_TAGS.map(([t, c]) => `<button class="wtag ${waTagF === t ? 'on' : ''}" onclick="waTagF='${t}';render()"><i style="background:${c}"></i>${t} · ${visibleLeads().filter(x => S.chats[x.id] && x.tags.includes(t)).length}</button>`).join('')}</div><div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div><div>${x.tags.filter(t => WA_TAGS.some(w => w[0] === t)).map(t => `<span class="wtag-mini"><i style="background:${WA_TAGS.find(w => w[0] === t)[1]}"></i>${t}</span>`).join('')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
   <div class="wa-chat">${l ? `<div class="wa-ch">${av(l.owner, 34)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}</div></div><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, '')}">Open in WhatsApp ↗</a></div></div>
     <div class="wa-tags"><span class="small muted">Tags:</span>${waTagChips(l)}</div>
     ${left > 0 ? `<div class="win24" style="background:var(--green-soft);color:var(--green)">🟢 24-hour window open · ${Math.floor(left / H)}h ${Math.floor(left % H / 60e3)}m left for free replies</div>` : `<div class="win24">⏱ 24-hour window closed — only Meta-approved templates can be sent</div>`}
@@ -877,18 +871,6 @@ function vAccounts() {
   ${cs.map(c => caseRow(c, 'acct')).join('') || '<tr><td colspan="8"><div class="empty">No completed accounts yet</div></td></tr>'}</tbody></table></div>`;
 }
 
-/* ---------------- appointments ---------------- */
-function vAppointments() {
-  const L = visibleLeads().filter(l => l.appt && l.appt.at && !['Lost', 'Junk'].includes(l.stage)).sort((a, b) => a.appt.at - b.appt.at);
-  const sod = new Date().setHours(0, 0, 0, 0), eod = new Date().setHours(23, 59, 59, 999);
-  const days = [...Array(7)].map((_, k) => { const d = new Date(sod + k * D); const n = L.filter(l => new Date(l.appt.at).toDateString() === d.toDateString()).length; return `<div class="day ${k === 0 ? 'on' : ''}"><span>${d.toLocaleDateString('en-GB', { weekday: 'short' })}</span><b>${d.getDate()}</b><em>${n ? n + ' appt' : '—'}</em></div>`; }).join('');
-  const groups = [['📅 Today', L.filter(l => l.appt.at >= sod && l.appt.at <= eod)], ['🔜 Upcoming', L.filter(l => l.appt.at > eod)], ['⚠️ Past — update the outcome', L.filter(l => l.appt.at < sod && l.stage === 'Appointment Booked')]];
-  const row = l => { const first = l.name.split(' ')[0]; const msg = `Hi ${first}, reminder of your meeting with Quick Path Horizon on ${fmtDate(l.appt.at)} at ${l.appt.place}. See you soon!`; return `<li>${av(l.owner, 30)}<div style="flex:1;min-width:0"><b style="cursor:pointer" onclick="openLead('${l.id}')">${esc(l.name)}</b> ${pill(l.stage)}<div class="small muted">🕑 ${fmtDate(l.appt.at)} · 📍 ${esc(l.appt.place || '—')} · ${esc(l.req.activity || 'activity not set')} · ${esc(user(l.owner).name)}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="datetime-local" class="inp" style="width:auto;padding:5px 8px" value="${toInput(l.appt.at)}" title="Reschedule" onchange="setL('${l.id}','appt.at',new Date(this.value).getTime())"><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, msg)}" onclick="setL('${l.id}','contact.wa',true)">💬 Reminder</a><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button></div></li>`; };
-  return `<div class="days">${days}</div>
-  <div class="card" style="margin-bottom:14px"><div class="card-b small">A lead appears here when it is moved to <b>Appointment Booked</b> (needs date, time and place). After the meeting, open the lead and move it to <b>Qualified</b> or <b>Follow-up</b>.</div></div>
-  ${groups.map(([t, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>${t}</h2><span class="small muted">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain appt">${arr.map(row).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('')}`;
-}
-
 /* ---------------- notifications ---------------- */
 function notify(to, text, link) {
   S.notifs = S.notifs || []; S.notifs.unshift({ id: Math.random().toString(36).slice(2), to, text, link, at: Date.now(), read: false }); S.notifs = S.notifs.slice(0, 300);
@@ -912,9 +894,10 @@ const EMAIL_TPL = [
   { id: 'proposal', name: 'Proposal', subject: 'Your UAE business setup proposal – {name}', body: 'Hi {name},\n\nPlease find attached your customised business setup proposal. The quote is valid for 7 days.\n\nLet me know if you have any questions.\n\nBest regards,\n{agent}\nQuick Path Horizon' },
   { id: 'payment', name: 'Payment link', subject: 'Payment link to start your company setup', body: 'Hi {name},\n\nHere is your secure payment link: {paylink}\n\nOnce payment is confirmed, our operations team starts your application the same day.\n\nBest regards,\n{agent}' },
   { id: 'docs', name: 'Documents required', subject: 'Documents needed for your application', body: 'Hi {name},\n\nTo start your application please send:\n• Passport copy\n• Photo with white background\n• Current visa / entry stamp\n• 3 trade name options\n\nBest regards,\n{agent}' },
+  { id: 'meeting', name: 'Meeting invite', subject: 'Your meeting with Quick Path Horizon – {date}', body: 'Hi {name},\n\nYour consultation with Quick Path Horizon is confirmed.\n\nDate & time: {date}\nMeeting: {meetlink}\n\nA calendar invite is attached. If you need to reschedule, just reply to this email.\n\nBest regards,\n{agent}\nQuick Path Horizon · 0581464678' },
   { id: 'followup', name: 'Follow-up', subject: 'Following up on your business setup enquiry', body: 'Hi {name},\n\nJust following up on our conversation. Would you like me to share the 3 most cost-effective options for your business activity?\n\nBest regards,\n{agent}' },
 ];
-function fillTpl(t, l) { return t.replace(/\{name\}/g, l.name.split(' ')[0]).replace(/\{agent\}/g, user(l.owner).name).replace(/\{paylink\}/g, (l.payLink && l.payLink.url) || 'https://pay.quickpathhorizon.com/' + l.id); }
+function fillTpl(t, l) { const a = l.appt || {}; t = t.replace(/\{date\}/g, a.at ? fmtDate(a.at) : '').replace(/\{meetlink\}/g, a.link || a.place || ''); return t.replace(/\{name\}/g, l.name.split(' ')[0]).replace(/\{agent\}/g, user(l.owner).name).replace(/\{paylink\}/g, (l.payLink && l.payLink.url) || 'https://pay.quickpathhorizon.com/' + l.id); }
 function composeEmail(id) {
   const l = S.leads.find(x => x.id === id); if (!l.email) return toast('Add the lead email first');
   const t = S.emailTpl[0];
@@ -961,7 +944,7 @@ function assignSettings() {
 /* ---------------- WhatsApp tags ---------------- */
 const WA_TAGS = [['Qualified', '#1E9E55'], ['Interested', '#2F6FB3'], ['Hot lead', '#D64545'], ['Price asked', '#C9820A'], ['Follow-up', '#6B4FBB'], ['Not interested', '#5A6B7D'], ['Junk', '#B42318']];
 let waTagF = '';
-function waTagChips(l) { return WA_TAGS.map(([t, c]) => { const on = l.tags.includes(t); return `<button class="wtag ${on ? 'on' : ''}" style="border-color:${c};${on ? `background:${c};color:#fff` : `color:${c}`}" onclick="waTag('${l.id}','${t}')">${on ? '✓ ' : ''}${t}</button>`; }).join(''); }
+function waTagChips(l) { return WA_TAGS.map(([t, c]) => { const on = l.tags.includes(t); return `<button class="wtag ${on ? 'on' : ''}" onclick="waTag('${l.id}','${t}')"><i style="background:${c}"></i>${t}</button>`; }).join(''); }
 function waTag(id, t) {
   const l = S.leads.find(x => x.id === id); const on = l.tags.includes(t);
   l.tags = on ? l.tags.filter(x => x !== t) : [...l.tags, t]; log(l, `WhatsApp tag ${on ? 'removed' : 'added'}: ${t}`); save(); render();
@@ -972,11 +955,104 @@ function waTag(id, t) {
   else toast('Tag added: ' + t);
 }
 
+/* ---------------- list / grid / calendar views ---------------- */
+let VM = (() => { try { return JSON.parse(localStorage.getItem('qph_vm')) || {}; } catch (e) { return {}; } })();
+const vmOf = r => VM[r] || 'list';
+function setVM(r, m) { VM[r] = m; localStorage.setItem('qph_vm', JSON.stringify(VM)); render(); }
+function vmToggle(r, modes = ['list', 'grid']) { const lbl = { list: '☰ List', grid: '▦ Grid', calendar: '🗓 Calendar' }; return `<div class="seg">${modes.map(m => `<button class="${vmOf(r) === m ? 'on' : ''}" onclick="setVM('${r}','${m}')">${lbl[m]}</button>`).join('')}</div>`; }
+function leadCard(l, extra) {
+  return `<div class="lcard" onclick="openLead('${l.id}')">
+    <div class="lc-top">${av(l.owner, 30)}<div style="min-width:0;flex:1"><b>${esc(l.name)}</b><div class="sub">${esc(l.phone)}</div></div>${pill(l.stage)}</div>
+    <div class="lc-mid"><span>${esc(l.source)}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + esc(l.attr.campaign) : ''}</span>${l.req.activity ? `<span>${esc(l.req.activity)}${has(l.req.zone) ? ' · ' + esc(zoneOf(l.req.zone).name) : ''}</span>` : ''}</div>
+    ${extra ? `<div class="lc-extra">${extra}</div>` : ''}
+    <div class="lc-foot">${l.temp === 'Hot' ? pill('Hot', 'p-hot') : ''}${l.dupOf ? pill('Duplicate', 'p-dup') : ''}<span class="small muted" style="margin-left:auto">${ago(l.createdAt)}</span>
+      <button class="btn btn-sm" title="WhatsApp" onclick="event.stopPropagation();openChat('${l.id}')">💬</button><a class="btn btn-sm" title="Call" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">📞</a></div>
+  </div>`;
+}
+
+/* follow-ups: list or grid (3 columns) */
+function vFollowups() {
+  const L = visibleLeads().filter(l => l.followUp && OPEN_STAGES.includes(l.stage));
+  const now = Date.now(), eod = new Date().setHours(23, 59, 59);
+  const grp = [['Overdue', 'red', L.filter(l => l.followUp < now)], ['Today', 'amber', L.filter(l => l.followUp >= now && l.followUp <= eod)], ['Upcoming', 'blue', L.filter(l => l.followUp > eod)]];
+  grp.forEach(g => g[2].sort((a, b) => a.followUp - b.followUp));
+  const head = `<div class="toolbar"><span class="count" style="margin-left:0">${L.length} follow-ups</span><span style="flex:1"></span>${vmToggle('followups')}</div>`;
+  if (vmOf('followups') === 'grid') return head + `<div class="kgrid">${grp.map(([t, c, arr]) => `<div class="kcol2"><h3><span class="dot d-${c}"></span>${t}<span class="muted">${arr.length}</span></h3>${arr.map(l => leadCard(l, `⏰ ${fmtDate(l.followUp)}`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('')}</div>`;
+  return head + grp.map(([t, c, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2><span class="dot d-${c}"></span>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div style="min-width:0"><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${esc(l.stage)}${l.notes.length ? ' · ' + esc(l.notes[l.notes.length - 1].text.slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm" onclick="event.stopPropagation();openChat('${l.id}')">WhatsApp</button><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
+}
+
+/* appointments: list / grid / calendar + meeting links */
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+const MEET_TYPES = [['office', 'Office visit', 'QPH Office, Dubai'], ['meet', 'Google Meet', 'Google Meet'], ['zoom', 'Zoom', 'Zoom'], ['phone', 'Phone call', 'Phone call'], ['client', 'Client location', 'Client location']];
+const typeOf = a => (MEET_TYPES.find(t => t[0] === a.type) || MEET_TYPES.find(t => t[2] === a.place) || MEET_TYPES[0]);
+function genLink(type) {
+  const r = n => Math.random().toString(36).replace(/[^a-z]/g, '').padEnd(n, 'x').slice(0, n);
+  if (type === 'meet') return `https://meet.google.com/${r(3)}-${r(4)}-${r(3)}`;
+  if (type === 'zoom') return `https://zoom.us/j/${Math.floor(8e10 + Math.random() * 1e10)}?pwd=${r(10)}`;
+  return '';
+}
+function gcalLink(l) {
+  const a = l.appt; const f = d => new Date(d).toISOString().replace(/[-:]|\.\d{3}/g, ''); const end = a.at + (a.duration || 30) * 60e3;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('QPH meeting – ' + l.name) + '&dates=' + f(a.at) + '/' + f(end) + '&details=' + encodeURIComponent((a.link ? 'Join: ' + a.link + '\n' : '') + (a.agenda || 'Business setup consultation')) + '&location=' + encodeURIComponent(a.link || a.place || '');
+}
+function apptMsg(l) { const a = l.appt; const t = typeOf(a); return `Hi ${l.name.split(' ')[0]}, your meeting with Quick Path Horizon is confirmed for ${fmtDate(a.at)} (${a.duration || 30} min).\n${a.link ? t[1] + ' link: ' + a.link : 'Place: ' + (a.place || '')}\nSee you then!`; }
+function apptCard(l) { const a = l.appt; const t = typeOf(a); return `<div class="ap-line">🕑 <b>${fmtDate(a.at)}</b> · ${t[1]}${a.link ? ` · <a href="${esc(a.link)}" target="_blank" onclick="event.stopPropagation()">Join link</a>` : ''}</div>`; }
+function apptModal(leadId, dayTs) {
+  const L = visibleLeads().filter(l => !['Lost', 'Junk'].includes(l.stage));
+  const l = leadId ? S.leads.find(x => x.id === leadId) : null; const a = (l && l.appt) || {};
+  const at = a.at || (dayTs ? new Date(dayTs).setHours(11, 0, 0, 0) : Date.now() + D);
+  const type = a.type || (typeOf(a)[0]);
+  modal(`<h2>${a.at ? 'Edit appointment' : 'New appointment'}</h2><div class="muted small">Creates the meeting, adds it to the calendar and sends the invite to the customer.</div>
+  <div class="form">
+    <div class="full"><label>Lead</label><select id="apLead">${L.map(x => `<option value="${x.id}" ${l && x.id === l.id ? 'selected' : ''}>${esc(x.name)} · ${esc(x.phone)} · ${esc(x.stage)}</option>`).join('')}</select></div>
+    <div><label>Date & time</label><input type="datetime-local" id="apAt" value="${toInput(at)}"></div>
+    <div><label>Duration</label><select id="apDur">${[15, 30, 45, 60, 90].map(m => `<option value="${m}" ${(a.duration || 30) === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></div>
+    <div class="full"><label>Meeting type</label><div class="seg" id="apType">${MEET_TYPES.map(t => `<button type="button" class="${type === t[0] ? 'on' : ''}" data-t="${t[0]}" onclick="apSetType('${t[0]}')">${t[1]}</button>`).join('')}</div></div>
+    <div class="full" id="apLinkRow" style="${['meet', 'zoom'].includes(type) ? '' : 'display:none'}"><label>Meeting link</label><div style="display:flex;gap:6px"><input id="apLink" value="${esc(a.link || '')}" placeholder="Click Create link"><button class="btn btn-sm btn-navy" type="button" onclick="$('apLink').value=genLink(document.querySelector('#apType .on').dataset.t);toast('Meeting link created')">Create link</button></div><div class="small muted" style="margin-top:4px">Demo creates a sample link. Live version creates a real meeting through your Google / Zoom account.</div></div>
+    <div class="full"><label>Agenda (optional)</label><input id="apAgenda" value="${esc(a.agenda || '')}" placeholder="e.g. Free zone options and cost for 2 visas"></div>
+    <div class="full" style="display:grid;gap:6px"><label class="opt on"><input type="checkbox" id="apEmail" checked> Email the invite to the customer${l && !l.email ? ' (no email on lead)' : ''}</label><label class="opt on"><input type="checkbox" id="apWa" checked> Send the invite on WhatsApp</label></div>
+  </div>
+  <div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveAppt()">Save & send invite</button></div>`);
+}
+function apSetType(t) { document.querySelectorAll('#apType button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); $('apLinkRow').style.display = ['meet', 'zoom'].includes(t) ? '' : 'none'; if (['meet', 'zoom'].includes(t) && !$('apLink').value) $('apLink').value = genLink(t); }
+function saveAppt() {
+  const l = S.leads.find(x => x.id === $('apLead').value); if (!l) return toast('Pick a lead');
+  const t = document.querySelector('#apType .on').dataset.t; const tt = MEET_TYPES.find(x => x[0] === t);
+  const link = ['meet', 'zoom'].includes(t) ? $('apLink').value.trim() : '';
+  if (['meet', 'zoom'].includes(t) && !link) return toast('Create the meeting link first');
+  if (!$('apAt').value) return toast('Pick date & time');
+  const wasNew = !(l.appt && l.appt.at);
+  l.appt = { at: new Date($('apAt').value).getTime(), duration: +$('apDur').value, type: t, place: tt[2], link, agenda: $('apAgenda').value.trim() };
+  log(l, `Appointment ${wasNew ? 'booked' : 'updated'}: ${fmtDate(l.appt.at)} · ${tt[1]}${link ? ' · ' + link : ''}`);
+  const sent = [];
+  if ($('apEmail').checked && l.email) { const tp = S.emailTpl.find(x => x.id === 'meeting'); l.emails = l.emails || []; l.emails.push({ at: Date.now(), to: l.email, subject: fillTpl(tp.subject, l), by: ME.id, att: 'invite.ics' }); l.contact.email = true; log(l, `Meeting invite emailed to ${l.email}`); sent.push('email'); }
+  if ($('apWa').checked) { S.chats[l.id] = S.chats[l.id] || []; S.chats[l.id].push({ from: 'out', text: apptMsg(l), at: Date.now(), by: ME.id }); l.contact.wa = true; log(l, 'Meeting invite sent on WhatsApp'); sent.push('WhatsApp'); }
+  notify(l.owner, `📅 Appointment ${fmtDate(l.appt.at)} with ${l.name} (${tt[1]})`, l.id);
+  const r = autoAdvance(l); save(); closeModal(); render();
+  toast(`📅 Appointment saved${sent.length ? ' · invite sent by ' + sent.join(' + ') : ''}${r ? ' · lead → ' + r[1] : ''}`);
+}
+function vAppointments() {
+  const L = visibleLeads().filter(l => l.appt && l.appt.at && !['Lost', 'Junk'].includes(l.stage)).sort((a, b) => a.appt.at - b.appt.at);
+  const sod = new Date().setHours(0, 0, 0, 0), eod = new Date().setHours(23, 59, 59, 999); const mode = vmOf('appointments');
+  const head = `<div class="toolbar"><button class="btn btn-primary btn-sm" onclick="apptModal()">+ New appointment</button><span class="count" style="margin-left:8px">${L.filter(l => l.appt.at >= sod).length} upcoming · ${L.filter(l => l.appt.at >= sod && l.appt.at <= eod).length} today</span><span style="flex:1"></span>${vmToggle('appointments', ['list', 'grid', 'calendar'])}</div>`;
+  const actions = l => `<button class="btn btn-sm" onclick="event.stopPropagation();apptModal('${l.id}')">Edit / resend</button>${l.appt.link ? `<button class="btn btn-sm" onclick="event.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText('${esc(l.appt.link)}');toast('Link copied')">Copy link</button>` : ''}<a class="btn btn-sm" target="_blank" href="${gcalLink(l)}" onclick="event.stopPropagation()">+ Google Calendar</a>`;
+  if (mode === 'calendar') {
+    const y = calMonth.getFullYear(), m = calMonth.getMonth(); const start = new Date(y, m, 1); const off = (start.getDay() + 6) % 7; const days = new Date(y, m + 1, 0).getDate();
+    const cells = []; for (let k = 0; k < 42; k++) { const d = new Date(y, m, 1 - off + k); cells.push(d); }
+    const evs = d => L.filter(l => new Date(l.appt.at).toDateString() === d.toDateString());
+    return head + `<div class="card"><div class="card-h"><div style="display:flex;gap:8px;align-items:center"><button class="btn btn-sm" onclick="calMonth=new Date(${y},${m - 1},1);render()">‹</button><h2 style="min-width:150px;text-align:center">${start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</h2><button class="btn btn-sm" onclick="calMonth=new Date(${y},${m + 1},1);render()">›</button><button class="btn btn-sm" onclick="calMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);render()">Today</button></div><span class="small muted">Click a day to book · click a meeting to edit</span></div>
+    <div class="cal">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="dh">${d}</div>`).join('')}${cells.slice(0, Math.ceil((off + days) / 7) * 7).map(d => { const e = evs(d); const today = d.toDateString() === new Date().toDateString(); return `<div class="dc ${d.getMonth() !== m ? 'other' : ''} ${today ? 'today' : ''}" onclick="apptModal(null,${d.getTime()})"><span class="num">${d.getDate()}</span>${e.map(l => `<div class="ev" onclick="event.stopPropagation();apptModal('${l.id}')" title="${esc(l.name)} · ${typeOf(l.appt)[1]}">${new Date(l.appt.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} ${esc(l.name.split(' ')[0])}${l.appt.link ? ' 🎥' : ''}</div>`).join('')}</div>`; }).join('')}</div></div>`;
+  }
+  const groups = [['Today', L.filter(l => l.appt.at >= sod && l.appt.at <= eod)], ['Upcoming', L.filter(l => l.appt.at > eod)], ['Past — update the outcome', L.filter(l => l.appt.at < sod && l.stage === 'Appointment Booked')]];
+  if (mode === 'grid') return head + groups.map(([t, arr]) => `<h3 class="sec-h">${t} <span class="muted">${arr.length}</span></h3><div class="cards">${arr.map(l => leadCard(l, apptCard(l) + `<div class="lc-act">${actions(l)}</div>`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('');
+  return head + groups.map(([t, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>${t}</h2><span class="small muted">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain appt">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 30)}<div style="flex:1;min-width:0"><b>${esc(l.name)}</b> <span class="small muted">· ${esc(l.stage)}</span><div class="small muted">${fmtDate(l.appt.at)} · ${l.appt.duration || 30} min · ${typeOf(l.appt)[1]}${l.appt.link ? ` · <a href="${esc(l.appt.link)}" target="_blank" onclick="event.stopPropagation()">${esc(l.appt.link)}</a>` : ''}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap">${actions(l)}</div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
+}
+
 /* ---------------- migrate / defaults ---------------- */
 function migrate() {
   S.notifs = S.notifs || []; S.rrMembers = S.rrMembers || TEAM.filter(t => t.role === 'sales').map(t => t.id);
   S.email = S.email || { provider: 'Gmail / Google Workspace', fromName: 'Quick Path Horizon', fromEmail: 'info@quickpathhorizon.com', host: 'smtp.gmail.com', port: 587, user: '', replyTo: '', connected: false, autoWelcome: true, autoProposal: true, autoPayment: false, staffAlerts: true };
-  S.emailTpl = S.emailTpl || JSON.parse(JSON.stringify(EMAIL_TPL));
+  S.emailTpl = S.emailTpl || JSON.parse(JSON.stringify(EMAIL_TPL)); if (!S.emailTpl.some(t => t.id === 'meeting')) S.emailTpl.splice(1, 0, JSON.parse(JSON.stringify(EMAIL_TPL.find(t => t.id === 'meeting'))));
   S.leads.forEach(l => { l.emails = l.emails || []; l.contact = l.contact || {}; l.appt = l.appt || {}; });
   S.leads.filter(l => l.payment && l.payment.status === 'confirmed').forEach(l => openCaseFor(l, true));
   if (!S.notifs.length) {

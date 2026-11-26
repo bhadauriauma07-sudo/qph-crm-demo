@@ -335,3 +335,122 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px}
 .wa-tags{display:flex;gap:2px;align-items:center;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--line);background:#FAFBFC}
 .wa{height:calc(100vh - 220px)}
 @media (max-width:820px){.days{grid-template-columns:repeat(4,1fr)}}
+
+/* =========================================================
+   CALM THEME — one brand colour (navy), soft neutrals,
+   orange only as a thin accent. Overrides everything above.
+   ========================================================= */
+:root{
+  --navy:#1E3A5F; --navy-2:#2A4A72; --navy-3:#16293F; --or:#D9772F; --or-2:#1E3A5F; --or-3:#9FB3C8;
+  --grad:#1E3A5F; --bg:#F6F7F9; --card:#fff; --line:#E6E8EC; --muted:#6B7280; --text:#1F2937;
+  --or-soft:#EEF2F7; --navy-soft:#EEF2F7; --green:#2F7D57; --green-soft:#EFF6F2; --red:#B54848; --red-soft:#FBF1F1;
+  --amber:#9A6A1F; --amber-soft:#FBF6EC; --blue:#3B6496; --blue-soft:#EEF3F9; --violet:#5F5A87; --violet-soft:#F3F2F8;
+  --grey-soft:#F1F3F5; --wa:#2E9E5B;
+}
+body{color:var(--text)}
+a{color:var(--navy-2)}
+/* emojis in headings / nav / buttons become monochrome so the UI stays calm */
+.nav-i .ic,.card-h h2,.lp-side h3,.sec-h,.hello h2,.dr-actions .btn:not(.btn-primary):not(.btn-navy),.lc-foot .btn,.toolbar .btn:not(.btn-primary){filter:grayscale(1)}
+.nav-i .ic{opacity:.65}
+/* buttons */
+.btn{border-color:var(--line);color:var(--text)}
+.btn:hover{border-color:#C9CED6;color:var(--text);background:#FAFBFC}
+.btn-primary,.btn-navy{background:var(--navy);color:#fff;border:0}
+.btn-primary:hover,.btn-navy:hover{background:var(--navy-2);color:#fff;filter:none}
+.btn-ai{background:#fff;color:var(--violet);border:1px solid #DDDAEA}.btn-ai:hover{background:var(--violet-soft);color:var(--violet);filter:none}
+.btn-wa{background:#fff;color:#2E7D4F;border:1px solid #CFE3D7}.btn-wa:hover{background:var(--green-soft);color:#2E7D4F;filter:none}
+.btn-danger{color:var(--red)}
+/* layout chrome */
+.login{background:#EEF2F7}
+.login-card{box-shadow:0 12px 40px rgba(30,58,95,.10)}
+.topbar{background:rgba(255,255,255,.96)}
+.demo-bar{background:#F1F3F6;color:#6B7280;border-bottom:1px solid var(--line)}
+.nav-i{color:#374151}
+.nav-i.on{background:var(--navy-soft);color:var(--navy);box-shadow:inset 3px 0 0 var(--or)}
+.nav-i .badge{background:#EEF0F3;color:#4B5563}
+.nav-i .badge.hot{background:var(--red-soft);color:var(--red)}
+.nav-i .badge.wab{background:var(--green-soft);color:var(--green)}
+.av{filter:saturate(.8)}
+/* cards / stats */
+.stat.hero{background:#fff;color:var(--text);border:1px solid var(--line);box-shadow:inset 3px 0 0 var(--navy)}
+.stat.hero span,.stat.hero small{color:var(--muted)}
+.stat.hero:after,.quote-h:after{display:none}
+.stat:hover{border-color:#C9D4E3}
+.bar i{background:var(--navy);opacity:.7}
+.bar.navy i{opacity:.45}
+.prog i{background:var(--navy);opacity:.55}
+/* pills: neutral background, small coloured dot carries the meaning */
+.pill{background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;font-weight:600}
+.p-new,.p-contacted,.p-not-contacted,.p-follow-up,.p-appointment-booked,.p-qualified,.p-proposal-sent,.p-payment-link-sent,.p-payment-received,.p-closed-won,.p-lost,.p-junk{background:#F5F6F8;color:#374151;border-color:#E5E7EB}
+.p-new::before,.p-contacted::before,.p-not-contacted::before,.p-follow-up::before,.p-appointment-booked::before,.p-qualified::before,.p-proposal-sent::before,.p-payment-link-sent::before,.p-payment-received::before,.p-closed-won::before,.p-lost::before,.p-junk::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--d,#9CA3AF)}
+.p-new{--d:#5B7FA8}.p-contacted{--d:#7A8BA0}.p-not-contacted{--d:#B0B7C1}.p-follow-up{--d:#C79A3E}.p-appointment-booked{--d:#7C6FA8}
+.p-qualified{--d:#4F7FAF}.p-proposal-sent{--d:#3E6B9A}.p-payment-link-sent{--d:#2F5C8A}.p-payment-received,.p-closed-won{--d:#3F9668}.p-lost,.p-junk{--d:#C25B5B}
+.p-hot{background:var(--red-soft);color:var(--red);border-color:#F0DADA}
+.p-warm{background:var(--amber-soft);color:var(--amber);border-color:#F1E5CC}
+.p-cold{background:#F5F6F8;color:#4B5563}
+.p-dup{background:var(--red-soft);color:var(--red);border-color:#F0DADA}
+.p-meta,.p-google,.p-website,.p-whatsapp,.p-referral,.p-walk-in{background:#F5F6F8;color:#4B5563;border-color:#E5E7EB}
+/* lead page */
+.pipe button{background:#F0F2F5;color:#6B7280}
+.pipe button.done{background:#E3EAF3;color:var(--navy)}
+.pipe button.cur{background:var(--navy);color:#fff}
+.pipe button.lock{color:#A3AAB5}
+.ai-box{background:#F8F8FB;border-color:#E6E4EF}.ai-box b{color:var(--violet)}
+.dup-box{background:#FDF7F7;border-color:#F0DCDC}.dup-box b{color:var(--red)}
+.attr{border-color:var(--line);background:#fff}.attr .card-h{border-color:var(--line)}
+.note{border-left-color:#C9D4E3}
+.cs3 button.on{border-color:var(--navy)}
+.ov{background:#F3F6FA;border-left-color:var(--navy)}
+/* tables / boards / misc */
+.tbl tr.click:hover td{background:#F8FAFC}
+.tbl tr.dup td{background:#FFFBFB}
+.kcol{background:#F1F3F6}
+.kcard:hover,.zc.on{border-color:var(--navy)}
+.zc.on{background:var(--navy-soft)}
+.opt.on{border-color:#C9D4E3;background:#F5F8FB}
+.tabs button.on{color:var(--navy);border-color:var(--navy)}
+.wa-msgs{background:#F4F3F0}
+.msg.out{background:#E8F3EC}
+.code{background:#16293F;color:#D9E2EC}
+.quote-h{background:var(--navy)}
+.day em{color:var(--navy-2)}.day.on em{color:#C8D3DF}
+/* WhatsApp tags: neutral chips with a small dot */
+.wtag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);color:#374151;background:#fff}
+.wtag i,.wtag-mini i{display:inline-block;width:7px;height:7px;border-radius:50%}
+.wtag.on{background:var(--navy-soft);border-color:#AFC0D6;color:var(--navy)}
+.wtag-mini{display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;color:#4B5563;font-weight:600}
+/* dots for group headings */
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.d-red{background:#C25B5B}.d-amber{background:#C79A3E}.d-blue{background:#5B7FA8}
+
+/* ---------- grid view ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-bottom:18px}
+.lcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 13px;cursor:pointer;display:grid;gap:8px;margin-bottom:10px}
+.cards .lcard{margin-bottom:0}
+.lcard:hover{border-color:#B8C6D8;box-shadow:0 2px 10px rgba(30,58,95,.06)}
+.lc-top{display:flex;gap:9px;align-items:center}
+.lc-top b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-mid{display:grid;gap:2px;font-size:12.5px;color:var(--muted)}
+.lc-mid span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-extra{font-size:12.5px;background:#F6F8FA;border-radius:8px;padding:7px 9px}
+.lc-act{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.lc-foot{display:flex;gap:5px;align-items:center}
+.lc-foot .btn{padding:3px 7px}
+.kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+.kcol2{background:#F1F3F6;border-radius:12px;padding:10px}
+.kcol2 h3{font-size:13px;display:flex;align-items:center;gap:2px;margin:2px 4px 10px}
+.kcol2 h3 .muted{margin-left:auto;font-weight:600}
+.sec-h{font-size:14px;margin:4px 2px 10px}
+.ap-line a{color:var(--navy-2);font-weight:600}
+/* ---------- calendar ---------- */
+.cal{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal .dh{padding:8px;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line);background:#FAFBFC}
+.cal .dc{min-height:104px;padding:6px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);cursor:pointer;min-width:0}
+.cal .dc:nth-child(7n+7){border-right:0}
+.cal .dc:hover{background:#FAFBFC}
+.cal .dc.other{background:#FBFBFC;color:#B0B7C1}
+.cal .num{display:inline-grid;place-items:center;width:24px;height:24px;font-size:12.5px;font-weight:600;border-radius:50%}
+.cal .dc.today .num{background:var(--navy);color:#fff}
+.cal .ev{font-size:11.5px;background:#EEF2F7;border-left:3px solid var(--navy);border-radius:4px;padding:2px 6px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.cal .ev:hover{background:#E1E8F1}
+@media (max-width:820px){.kgrid{grid-template-columns:1fr}.cal .dc{min-height:64px}.cal .ev{font-size:10px}}

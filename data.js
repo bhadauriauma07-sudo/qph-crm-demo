@@ -1,10 +1,10 @@
 /* QPH CRM demo — constants and seed data */
 const TEAM = [
-  { id: 'u1', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager & Accounts', color: '#0E2A47' },
-  { id: 'u2', name: 'Aisha Khan', role: 'sales', title: 'Sales Executive', color: '#E46E1B' },
-  { id: 'u3', name: 'Rohan Verma', role: 'sales', title: 'Sales Executive', color: '#B5530F' },
-  { id: 'u4', name: 'Sara Ali', role: 'ops', title: 'Operations Executive', color: '#2F6FB3' },
-  { id: 'u5', name: 'Imran Sheikh', role: 'ops', title: 'Operations Executive', color: '#6B4FBB' },
+  { id: 'u1', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager & Accounts', color: '#1E3A5F' },
+  { id: 'u2', name: 'Aisha Khan', role: 'sales', title: 'Sales Executive', color: '#486581' },
+  { id: 'u3', name: 'Rohan Verma', role: 'sales', title: 'Sales Executive', color: '#627D98' },
+  { id: 'u4', name: 'Sara Ali', role: 'ops', title: 'Operations Executive', color: '#3E6B67' },
+  { id: 'u5', name: 'Imran Sheikh', role: 'ops', title: 'Operations Executive', color: '#6B5E7B' },
 ];
 
 const STAGES = ['New', 'Contacted', 'Not Contacted', 'Follow-up', 'Appointment Booked', 'Qualified', 'Proposal Sent', 'Payment Link Sent', 'Payment Received', 'Closed Won', 'Lost', 'Junk'];
@@ -149,7 +149,7 @@ function buildSeed() {
     lead.interested = QP ? 'Yes' : contacted && rnd() < 0.5 ? 'Not sure' : '';
     lead.start = QP ? pick(['Immediately', 'Within 1 month']) : '';
     if (stage === 'Appointment Booked') { buildSeed.ap = (buildSeed.ap || 0) + 1; lead.followUp = now + [2 * H, -1 * D, 1 * D, 3 * D][(buildSeed.ap - 1) % 4]; }
-    lead.appt = stage === 'Appointment Booked' ? { at: lead.followUp, place: ['QPH Office, Dubai', 'Zoom / Google Meet'][i % 2] } : {};
+    lead.appt = stage === 'Appointment Booked' ? (i % 2 ? { at: lead.followUp, type: 'meet', place: 'Google Meet', duration: 30, link: 'https://meet.google.com/qph-' + (1000 + i) + '-dxb' } : { at: lead.followUp, type: 'office', place: 'QPH Office, Dubai', duration: 45, link: '' }) : {};
     lead.payLink = ['Payment Link Sent', 'Payment Received', 'Closed Won'].includes(stage) ? { amount: lead.value, url: 'https://pay.quickpathhorizon.com/' + lead.id } : null;
     lead.ncReason = ''; lead.retryAt = null;
     if (!QP) { if (!contacted || rnd() < 0.5) lead.req.activity = ''; if (!contacted) lead.req.zone = ''; }
