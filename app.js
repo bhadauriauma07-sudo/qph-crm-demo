@@ -5,7 +5,9 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-let leadFilter = { stage: '', source: '', campaign: '', owner: '', temp: '', dup: false, pay: false };
+const APP_V = 8;
+const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
+let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
 let waOpen = null;
 let setTab = 'team', campTab = 'campaign', opsMine = false;
@@ -37,7 +39,7 @@ function dupsOf(id) { return S.leads.filter(l => l.dupOf === id); }
 function log(l, text, by) { l.activity.push({ at: Date.now(), by: by || ME.id, text }); l.updatedAt = Date.now(); }
 function inPeriod(ts) { if (period === 'all') return true; if (period === 'today') return new Date(ts).toDateString() === new Date().toDateString(); return ts >= Date.now() - (+period) * D; }
 function visibleLeads() { if (!ME) return []; if (ME.role === 'admin') return S.leads; if (ME.role === 'sales') return S.leads.filter(l => l.owner === ME.id); return []; }
-function visibleCases() { if (ME.role === 'ops' && opsMine) return S.cases.filter(c => c.owner === ME.id); return S.cases; }
+function visibleCases() { const f = opsFilter; return S.cases.filter(c => (!(ME.role === 'ops' && opsMine) || c.owner === ME.id) && (!f.stage.length || f.stage.includes(c.stage)) && (!f.owner.length || f.owner.includes(c.owner))); return S.cases; }
 function unread(l) { const c = S.chats[l.id]; if (!c || !c.length) return 0; const r = S.read[l.id] || 0; return c.filter(m => m.from === 'in' && m.at > r).length; }
 function waLink(phone, text) { return 'https://wa.me/' + String(phone).replace(/\D/g, '').replace(/^00/, '').replace(/^0(?=5)/, '971') + '?text=' + encodeURIComponent(text || ''); }
 
@@ -197,7 +199,22 @@ function bars(rows, cls = '') { const max = Math.max(1, ...rows.map(r => r[1]));
 function funnel(L) { return bars(FUNNEL.map(st => { const idx = STAGES.indexOf(st); return [st, L.filter(l => { const i = STAGES.indexOf(l.stage); return st === 'New' ? true : (i >= idx && i <= 9); }).length]; })); }
 function countBy(arr, fn) { const m = {}; arr.forEach(x => { const k = fn(x); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }
 function leadLi(l, right) { return `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div><b>${esc(l.name)}</b> ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}<div class="small muted">${esc(l.source)}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + esc(l.attr.campaign) : ''}</div></div><div class="r">${right || pill(l.stage)}</div></li>`; }
-function filterGo(f) { leadFilter = Object.assign({ stage: '', source: '', campaign: '', owner: '', temp: '', dup: false, pay: false }, f); drawer = null; go('leads'); }
+function filterGo(f) { leadFilter = BLANK_LF(); Object.entries(f || {}).forEach(([k, v]) => { leadFilter[k] = Array.isArray(leadFilter[k]) ? (Array.isArray(v) ? v : v ? [v] : []) : v; }); drawer = null; go('leads'); }
+/* multi-select filter dropdown */
+const getF = n => n === 'ops' ? opsFilter : leadFilter;
+const anyF = f => Object.values(f).some(v => Array.isArray(v) ? v.length : v);
+function msel(n, k, opts, label) {
+  const f = getF(n); const sel = f[k]; const id = n + '_' + k; MS[id] = opts.map(o => Array.isArray(o) ? o : [o, o]);
+  const txt = sel.length ? `${label}: ${sel.length === 1 ? esc((MS[id].find(o => o[0] === sel[0]) || [0, sel[0]])[1]) : sel.length + ' selected'}` : 'All ' + label.toLowerCase();
+  return `<div class="ms"><button class="ms-btn ${sel.length ? 'has' : ''}" onclick="event.stopPropagation();openMs=openMs==='${id}'?null:'${id}';render()">${txt} <span class="muted">▾</span></button>${openMs === id ? `<div class="ms-pop" onclick="event.stopPropagation()">${MS[id].map((o, i) => `<label><input type="checkbox" ${sel.includes(o[0]) ? 'checked' : ''} onchange="toggleF('${n}','${k}',${i},this.checked)"> ${esc(o[1])}</label>`).join('')}<div class="ms-f"><button class="btn btn-sm" onclick="getF('${n}')['${k}']=[];render()">Clear</button><button class="btn btn-sm btn-primary" onclick="openMs=null;render()">Done</button></div></div>` : ''}</div>`;
+}
+function toggleF(n, k, i, on) { const f = getF(n); const v = MS[n + '_' + k][i][0]; f[k] = on ? [...new Set([...f[k], v])] : f[k].filter(x => x !== v); render(); }
+document.addEventListener('click', () => { if (openMs) { openMs = null; render(); } });
+const passLF = (l, f = leadFilter) => (!f.stage.length || f.stage.includes(l.stage)) && (!f.source.length || f.source.includes(l.source)) && (!f.campaign.length || f.campaign.includes(l.attr.campaign)) && (!f.owner.length || f.owner.includes(l.owner)) && (!f.temp.length || f.temp.includes(l.temp)) && (!f.dup || l.dupOf || dupsOf(l.id).length) && (!f.pay || (l.payment && l.payment.status === 'pending'));
+function leadFilterBar(opts = {}) {
+  const all = visibleLeads(); const camps = [...new Set(all.map(l => l.attr.campaign).filter(c => c && c !== '(none)'))];
+  return `${opts.noStage ? '' : msel('lead', 'stage', opts.stages || STAGES, 'Stages')}${msel('lead', 'source', SOURCES, 'Sources')}${msel('lead', 'campaign', camps, 'Campaigns')}${ME.role === 'admin' ? msel('lead', 'owner', TEAM.filter(t => t.role === 'sales').map(t => [t.id, t.name]), 'Owners') : ''}${msel('lead', 'temp', ['Hot', 'Warm', 'Cold'], 'Hot/Warm/Cold')}${anyF(leadFilter) ? `<button class="btn btn-sm" onclick="leadFilter=BLANK_LF();render()">Clear filters</button>` : ''}`;
+}
 
 function vAdminDash() {
   const L = S.leads.filter(l => inPeriod(l.createdAt));
@@ -309,7 +326,7 @@ function expiryPill(ts) { const d = Math.round((ts - Date.now()) / D); return d 
 /* ---------------- leads ---------------- */
 function filteredLeads() {
   const q = $('q').value.trim().toLowerCase(); const f = leadFilter; const RS = { newleads: ['New'], contacted: ['Contacted', 'Follow-up', 'Not Contacted'] }[route];
-  return visibleLeads().filter(l => (!RS || RS.includes(l.stage)) && (!f.stage || l.stage === f.stage) && (!f.source || l.source === f.source) && (!f.campaign || l.attr.campaign === f.campaign) && (!f.owner || l.owner === f.owner) && (!f.temp || l.temp === f.temp) && (!f.dup || l.dupOf || dupsOf(l.id).length) && (!f.pay || (l.payment && l.payment.status === 'pending'))
+  return visibleLeads().filter(l => (!RS || RS.includes(l.stage)) && passLF(l, f)
     && (!q || [l.name, l.phone, l.email, l.id, l.attr.campaign, l.attr.adset, l.attr.ad, ...(l.tags || [])].join(' ').toLowerCase().includes(q) || normPhone(q).length > 5 && normPhone(l.phone).includes(normPhone(q))))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -319,10 +336,8 @@ function vLeads() {
   const camps = [...new Set(all.map(l => l.attr.campaign).filter(c => c && c !== '(none)'))];
   const sel = (k, opts, label) => `<select onchange="setF('${k}',this.value)"><option value="">${label}</option>${opts.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${leadFilter[k] === v ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>`;
   return `<div class="toolbar">
-    ${sel('stage', STAGES, 'All stages')}${sel('source', SOURCES, 'All sources')}${sel('campaign', camps, 'All campaigns')}
-    ${ME.role === 'admin' ? sel('owner', TEAM.filter(t => t.role === 'sales').map(t => [t.id, t.name]), 'All owners') : ''}${sel('temp', ['Hot', 'Warm', 'Cold'], 'Hot/Warm/Cold')}
+    ${leadFilterBar({ stages: route === 'contacted' ? ['Contacted', 'Follow-up', 'Not Contacted'] : STAGES, noStage: route === 'newleads' })}
     <label class="btn btn-sm" style="cursor:pointer"><input type="checkbox" ${leadFilter.dup ? 'checked' : ''} onchange="setF('dup',this.checked)"> Duplicates only</label>
-    ${Object.values(leadFilter).some(Boolean) ? `<button class="btn btn-sm" onclick="filterGo({})">Clear</button>` : ''}
     <span class="count">${L.length} of ${all.length} leads</span>
     <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>${vmToggle('leads')}
   </div>
@@ -463,7 +478,7 @@ function leadPage() {
   <div class="lp-h">
     <div class="lp-av" style="background:${user(l.owner).color}">${initials(l.name)}</div>
     <div style="flex:1;min-width:0"><h2>${esc(l.name)}</h2>
-      <div class="lp-meta">📱 ${esc(l.phone)} · ✉ ${esc(l.email || '—')} · ${esc(l.source)}${a.platform ? ' – ' + esc(a.platform) : ''} · Created ${ago(l.createdAt)}</div>
+      <div class="lp-meta">📱 ${esc(l.phone)} · ✉ ${esc(l.email || '—')}</div>
       <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${pill('● ' + l.stage, 'p-' + slug(l.stage))} ${l.temp === 'Hot' ? pill('🔥 Hot', 'p-hot') : pill(l.temp)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')}<button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div></div>
     <div class="lp-nav"><button class="btn btn-sm" onclick="navLead(-1)" ${pos <= 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${pos + 1} / ${L.length}</span><button class="btn btn-sm" onclick="navLead(1)" ${pos >= L.length - 1 ? 'disabled' : ''}>Next ›</button><button class="icon-btn" onclick="closeDrawer()">✕</button></div>
   </div>
@@ -752,7 +767,7 @@ function vCampaigns() {
 /* ---------------- operations ---------------- */
 function vOps() {
   const cs = visibleCases();
-  return `<div class="toolbar"><div class="seg"><button class="${!opsMine ? 'on' : ''}" onclick="opsMine=false;render()">All cases</button><button class="${opsMine ? 'on' : ''}" onclick="opsMine=true;render()">${ME.role === 'ops' ? 'My cases' : 'Ops team'}</button></div><span class="count">${cs.length} cases · Closed Won leads arrive here automatically</span></div>
+  return `<div class="toolbar"><div class="seg"><button class="${!opsMine ? 'on' : ''}" onclick="opsMine=false;render()">All cases</button><button class="${opsMine ? 'on' : ''}" onclick="opsMine=true;render()">${ME.role === 'ops' ? 'My cases' : 'Ops team'}</button></div>${msel('ops', 'stage', OPS_STAGES, 'Ops stages')}${msel('ops', 'owner', TEAM.filter(t => t.role === 'ops').map(t => [t.id, t.name]), 'Ops owners')}${anyF(opsFilter) ? `<button class="btn btn-sm" onclick="opsFilter={stage:[],owner:[]};render()">Clear filters</button>` : ''}<span class="count">${cs.length} cases · paid customers arrive here automatically</span></div>
   <div class="kanban">${OPS_STAGES.map((s, i) => { const arr = cs.filter(c => c.stage === s); return `<div class="kcol"><h3><span>${s}</span><span>${arr.length}</span></h3>${arr.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const dn = DOCS.filter(d => c.docs[d]).length; return `<div class="kcard" onclick="openCase('${c.id}')"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(c.company)}</b>${av(c.owner, 22)}</div><div class="sub">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)} · ${c.visas} visa</div><div class="sub">📄 ${dn}/${DOCS.length} docs</div><div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></div>`; }).join('')}</div>`; }).join('')}</div>`;
 }
 function caseDrawer() {
@@ -858,8 +873,9 @@ function caseRow(c, mode) {
   : `<td class="mono">${esc(c.licenceNo)}</td><td>${c.licenceExpiry ? expiryPill(c.licenceExpiry) : '—'}</td><td>✅ ${st}/${vis}</td><td>✅ ${dn}/${DOCS.length}</td><td>${l.payment ? aed(l.payment.amount) : '—'}</td>`}<td>${av(c.owner, 24)}</td></tr>`;
 }
 function vCustomers() {
-  const cs = S.cases.filter(c => !acctComplete(c) || c.stage !== 'Setup Completed').sort((a, b) => b.startedAt - a.startedAt);
+  const cs = visibleCases().filter(c => !acctComplete(c) || c.stage !== 'Setup Completed').sort((a, b) => b.startedAt - a.startedAt);
   return `<div class="card" style="margin-bottom:14px"><div class="card-b small">🏢 <b>Customers</b> = qualified leads whose payment is <b>confirmed by Accounts</b>. From here the <b>Operations team</b> handles licence, documents and visas. When licence + all visas + all documents are complete and setup is marked completed, the client moves to <b>Accounts</b>. Sales staff cannot see this module.</div></div>
+  <div class="toolbar">${msel('ops', 'stage', OPS_STAGES, 'Ops stages')}${msel('ops', 'owner', TEAM.filter(t => t.role === 'ops').map(t => [t.id, t.name]), 'Ops owners')}${anyF(opsFilter) ? `<button class="btn btn-sm" onclick="opsFilter={stage:[],owner:[]};render()">Clear filters</button>` : ''}</div>
   <div class="card tbl-wrap"><div class="card-h"><h2>Customers in progress</h2><span class="small muted">${cs.length} paid clients</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Payment</th><th>Ops stage</th><th>Documents</th><th>Visas stamped</th><th>Since</th><th>Ops</th></tr></thead><tbody>
   ${cs.map(c => caseRow(c, 'cust')).join('') || '<tr><td colspan="8"><div class="empty">No customers in progress</div></td></tr>'}</tbody></table></div>`;
 }
@@ -972,11 +988,11 @@ function leadCard(l, extra) {
 
 /* follow-ups: list or grid (3 columns) */
 function vFollowups() {
-  const L = visibleLeads().filter(l => l.followUp && OPEN_STAGES.includes(l.stage));
+  const L = visibleLeads().filter(l => l.followUp && OPEN_STAGES.includes(l.stage) && passLF(l));
   const now = Date.now(), eod = new Date().setHours(23, 59, 59);
   const grp = [['Overdue', 'red', L.filter(l => l.followUp < now)], ['Today', 'amber', L.filter(l => l.followUp >= now && l.followUp <= eod)], ['Upcoming', 'blue', L.filter(l => l.followUp > eod)]];
   grp.forEach(g => g[2].sort((a, b) => a.followUp - b.followUp));
-  const head = `<div class="toolbar"><span class="count" style="margin-left:0">${L.length} follow-ups</span><span style="flex:1"></span>${vmToggle('followups')}</div>`;
+  const head = `<div class="toolbar">${leadFilterBar({ stages: OPEN_STAGES })}<span class="count">${L.length} follow-ups</span>${vmToggle('followups')}</div>`;
   if (vmOf('followups') === 'grid') return head + `<div class="kgrid">${grp.map(([t, c, arr]) => `<div class="kcol2"><h3><span class="dot d-${c}"></span>${t}<span class="muted">${arr.length}</span></h3>${arr.map(l => leadCard(l, `⏰ ${fmtDate(l.followUp)}`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('')}</div>`;
   return head + grp.map(([t, c, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2><span class="dot d-${c}"></span>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div style="min-width:0"><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${esc(l.stage)}${l.notes.length ? ' · ' + esc(l.notes[l.notes.length - 1].text.slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm" onclick="event.stopPropagation();openChat('${l.id}')">WhatsApp</button><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
 }
@@ -1032,9 +1048,9 @@ function saveAppt() {
   toast(`📅 Appointment saved${sent.length ? ' · invite sent by ' + sent.join(' + ') : ''}${r ? ' · lead → ' + r[1] : ''}`);
 }
 function vAppointments() {
-  const L = visibleLeads().filter(l => l.appt && l.appt.at && !['Lost', 'Junk'].includes(l.stage)).sort((a, b) => a.appt.at - b.appt.at);
+  const L = visibleLeads().filter(l => l.appt && l.appt.at && !['Lost', 'Junk'].includes(l.stage) && passLF(l)).sort((a, b) => a.appt.at - b.appt.at);
   const sod = new Date().setHours(0, 0, 0, 0), eod = new Date().setHours(23, 59, 59, 999); const mode = vmOf('appointments');
-  const head = `<div class="toolbar"><button class="btn btn-primary btn-sm" onclick="apptModal()">+ New appointment</button><span class="count" style="margin-left:8px">${L.filter(l => l.appt.at >= sod).length} upcoming · ${L.filter(l => l.appt.at >= sod && l.appt.at <= eod).length} today</span><span style="flex:1"></span>${vmToggle('appointments', ['list', 'grid', 'calendar'])}</div>`;
+  const head = `<div class="toolbar"><button class="btn btn-primary btn-sm" onclick="apptModal()">+ New appointment</button>${leadFilterBar()}<span class="count">${L.filter(l => l.appt.at >= sod).length} upcoming · ${L.filter(l => l.appt.at >= sod && l.appt.at <= eod).length} today</span>${vmToggle('appointments', ['list', 'grid', 'calendar'])}</div>`;
   const actions = l => `<button class="btn btn-sm" onclick="event.stopPropagation();apptModal('${l.id}')">Edit / resend</button>${l.appt.link ? `<button class="btn btn-sm" onclick="event.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText('${esc(l.appt.link)}');toast('Link copied')">Copy link</button>` : ''}<a class="btn btn-sm" target="_blank" href="${gcalLink(l)}" onclick="event.stopPropagation()">+ Google Calendar</a>`;
   if (mode === 'calendar') {
     const y = calMonth.getFullYear(), m = calMonth.getMonth(); const start = new Date(y, m, 1); const off = (start.getDay() + 6) % 7; const days = new Date(y, m + 1, 0).getDate();
@@ -1068,3 +1084,4 @@ function migrate() {
 
 migrate();
 boot();
+fetch('version.json?t=' + Date.now()).then(r => r.json()).then(v => { if (v.v > APP_V && sessionStorage.getItem('qph_reloaded') !== String(v.v)) { sessionStorage.setItem('qph_reloaded', String(v.v)); location.replace(location.pathname + '?v=' + v.v + location.hash); } }).catch(() => { });
