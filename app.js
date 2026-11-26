@@ -5,7 +5,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 9;
+const APP_V = 10;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -421,7 +421,7 @@ function tryStage(id, s) {
   const back = PIPE.indexOf(s) >= 0 && PIPE.indexOf(l.stage) > PIPE.indexOf(s);
   if (s === 'Lost' || s === 'Junk') return reasonModal(id, s);
   const m = back ? [] : missing(l, s);
-  if (m.length) return modal(`<h2>🔒 Can't move to "${s}" yet</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
+  if (m.length) return modal(`<h2>Fill the mandatory fields for "${s}"</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
   moveStage(l, s, back ? 'back' : ''); save(); render(); toast('Stage → ' + s);
 }
 function moveStage(l, s, how) {
@@ -489,7 +489,7 @@ function leadPage() {
   </div>
   <div class="dr-actions">
     <a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="setL('${l.id}','contact.call',true)">📞 Call</a>
-    <button class="btn btn-sm" onclick="openChat('${l.id}')"><span style="color:var(--wa)">●</span> WhatsApp</button>
+    <button class="btn btn-sm btn-wa" onclick="openChat('${l.id}')"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg> WhatsApp</button>
     <button class="btn btn-sm" onclick="composeEmail('${l.id}')">✉ Email</button>
     <button class="btn btn-sm" onclick="proposalFor('${l.id}')">▤ Create proposal</button>
     <button class="btn btn-sm" onclick="document.getElementById('sec-fu').scrollIntoView({behavior:'smooth'})">⏰ Reminder</button>
@@ -497,7 +497,7 @@ function leadPage() {
     <span style="flex:1"></span>
     ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">🗑 Delete</button>` : ''}
   </div>
-  <div class="pipe">${PIPE.map((s, i) => { const side = s === 'Follow-up' || s === 'Appointment Booked'; const done = !isClosed && ci > i && (!side || !missing(l, s).length); const skipped = !isClosed && ci > i && !done; const cur = l.stage === s; const lock = !done && !cur && !skipped && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''} ${lock ? 'lock' : ''}" onclick="tryStage('${l.id}','${s}')" title="${lock ? 'Locked — needs: ' + esc(missing(l, s).join(', ')) : s}">${lock ? '🔒 ' : done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
+  <div class="pipe">${PIPE.map((s, i) => { const side = s === 'Follow-up' || s === 'Appointment Booked'; const done = !isClosed && ci > i && (!side || !missing(l, s).length); const skipped = !isClosed && ci > i && !done; const cur = l.stage === s; const lock = !done && !cur && !skipped && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''}" onclick="tryStage('${l.id}','${s}')" title="${s}">${done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
   ${pend.length ? `<div class="pending"><div><b>⚠ ${pend.length} mandatory field${pend.length > 1 ? 's' : ''} pending for ${esc(goal)}</b><div class="small muted">Fill these and the lead moves to ${esc(goal)} automatically${goal === 'Closed Won' ? ' (Closed Won is confirmed by click)' : ''}.</div></div><div class="pend-chips">${pend.map(c => `<button onclick="goField('${c[2]}')">${esc(c[1])} →</button>`).join('')}</div></div>` : goal && !isClosed ? `<div class="pending ok"><b>✅ All details for ${esc(goal)} are filled</b>${goal === 'Closed Won' ? `<button class="btn btn-sm btn-primary" onclick="tryStage('${l.id}','Closed Won')">Mark Closed Won</button>` : ''}</div>` : ''}
   ${isClosed ? `<div class="dup-box"><b>${esc(l.stage)}</b><span>Reason: ${esc(l.reason)}</span><button class="btn btn-sm" onclick="tryStage('${l.id}','New')">Re-open as New</button></div>` : ''}
 
@@ -679,7 +679,7 @@ function vWhatsApp() {
   const left = lastIn ? 24 * H - (Date.now() - lastIn.at) : -1;
   setTimeout(save, 0);
   return `<div class="toolbar"><span class="small muted">Filter chats by tag:</span><button class="wtag ${!waTagF ? 'on' : ''}" onclick="waTagF='';render()">All</button>${WA_TAGS.map(([t, c]) => `<button class="wtag ${waTagF === t ? 'on' : ''}" onclick="waTagF='${t}';render()"><i style="background:${c}"></i>${t} · ${visibleLeads().filter(x => S.chats[x.id] && x.tags.includes(t)).length}</button>`).join('')}</div><div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div><div>${x.tags.filter(t => WA_TAGS.some(w => w[0] === t)).map(t => `<span class="wtag-mini"><i style="background:${WA_TAGS.find(w => w[0] === t)[1]}"></i>${t}</span>`).join('')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
-  <div class="wa-chat">${l ? `<div class="wa-ch">${av(l.owner, 34)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}</div></div><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, '')}">Open in WhatsApp ↗</a></div></div>
+  <div class="wa-chat">${l ? `<div class="wa-ch">${av(l.owner, 34)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}</div></div><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, '')}"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg> Open in WhatsApp ↗</a></div></div>
     <div class="wa-tags"><span class="small muted">Tags:</span>${waTagChips(l)}</div>
     ${left > 0 ? `<div class="win24" style="background:var(--green-soft);color:var(--green)">🟢 24-hour window open · ${Math.floor(left / H)}h ${Math.floor(left % H / 60e3)}m left for free replies</div>` : `<div class="win24">⏱ 24-hour window closed — only Meta-approved templates can be sent</div>`}
     <div class="wa-msgs">${msgs.map(m => `<div class="msg ${m.from}">${esc(m.text)}<span class="t">${m.from === 'out' ? esc(user(m.by).name) + ' · ' : ''}${fmtDate(m.at)} ${m.from === 'out' ? '<span style="color:#34B7F1">✓✓</span>' : ''}</span></div>`).join('') || '<div class="empty">No messages yet — send a template to start</div>'}</div>
@@ -687,7 +687,7 @@ function vWhatsApp() {
     <input id="waIn" placeholder="Type a message… (Hinglish ok → Polish)" onkeydown="if(event.key==='Enter')waSend('${l.id}')">
     <button class="btn btn-sm btn-ai" onclick="$('waIn').value=aiReply(S.leads.find(x=>x.id==='${l.id}'));toast('✨ AI drafted a reply')">✨ AI reply</button>
     <button class="btn btn-sm" onclick="$('waIn').value=polish($('waIn').value)">Polish</button>
-    <button class="btn btn-sm btn-wa" onclick="waSend('${l.id}')">Send ➤</button></div>` : '<div class="empty">Select a chat</div>'}</div></div>
+    <button class="wa-send" title="Send" onclick="waSend('${l.id}')"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button></div>` : '<div class="empty">Select a chat</div>'}</div></div>
   <p class="small muted" style="margin-top:10px">Demo mode: messages are stored in the CRM only. Live version connects the WhatsApp Business Cloud API (Meta) — auto-welcome for new numbers, templates outside 24h, and the AI Agent on 🤖-tagged chats.</p>`;
 }
 function last(l) { const c = S.chats[l.id] || []; return c[c.length - 1] || {}; }
@@ -862,7 +862,7 @@ function setOps(id, i) {
   const n = +c.visas || 0;
   if (i >= 6) for (let k = c.visaHolders.length; k < n; k++) c.visaHolders.push({ name: k === 0 && l ? l.name : (l ? l.name.split(' ')[0] : 'Client') + ' – Employee ' + k, status: 'In process', expiry: null });
   if (i >= 7) c.visaHolders.forEach(v => { v.status = 'Stamped'; v.expiry = v.expiry || Date.now() + 730 * D; });
-  if (i === 8 && !acctComplete(c)) return modal(`<h2>🔒 Can't complete setup yet</h2><ul class="crit">${acctChecks(c).map(x => `<li class="${x[0] ? 'ok' : ''}">${x[0] ? '✅' : '⭕'} ${esc(x[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+  if (i === 8 && !acctComplete(c)) return modal(`<h2>Complete these before Setup Completed</h2><ul class="crit">${acctChecks(c).map(x => `<li class="${x[0] ? 'ok' : ''}">${x[0] ? '✅' : '⭕'} ${esc(x[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
   const wasDone = acctComplete(c) && c.stage === 'Setup Completed';
   c.log.push({ at: Date.now(), by: ME.id, text: `Stage → ${OPS_STAGES[i]}` }); c.stage = OPS_STAGES[i]; save(); render();
   if (i === 8 && !wasDone) { notify('u1', `✅ ${c.company} setup complete — moved to Accounts`, 'case:' + c.id); if (l) notify(l.owner, `🎉 Your client ${l.name} (${c.company}) setup is complete`, 'case:' + c.id); }
@@ -985,7 +985,7 @@ function leadCard(l, extra) {
     <div class="lc-mid"><span>${esc(l.source)}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + esc(l.attr.campaign) : ''}</span>${l.req.activity ? `<span>${esc(l.req.activity)}${has(l.req.zone) ? ' · ' + esc(zoneOf(l.req.zone).name) : ''}</span>` : ''}</div>
     ${extra ? `<div class="lc-extra">${extra}</div>` : ''}
     <div class="lc-foot">${l.temp === 'Hot' ? pill('Hot', 'p-hot') : ''}${l.dupOf ? pill('Duplicate', 'p-dup') : ''}<span class="small muted" style="margin-left:auto">${ago(l.createdAt)}</span>
-      <button class="btn btn-sm" title="WhatsApp" onclick="event.stopPropagation();openChat('${l.id}')">💬</button><a class="btn btn-sm" title="Call" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">📞</a></div>
+      <button class="btn btn-sm btn-wa" title="WhatsApp" onclick="event.stopPropagation();openChat('${l.id}')"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg></button><a class="btn btn-sm" title="Call" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">📞</a></div>
   </div>`;
 }
 
@@ -997,7 +997,7 @@ function vFollowups() {
   grp.forEach(g => g[2].sort((a, b) => a.followUp - b.followUp));
   const head = `<div class="toolbar">${leadFilterBar({ stages: OPEN_STAGES })}<span class="count">${L.length} follow-ups</span>${vmToggle('followups')}</div>`;
   if (vmOf('followups') === 'grid') return head + `<div class="kgrid">${grp.map(([t, c, arr]) => `<div class="kcol2"><h3><span class="dot d-${c}"></span>${t}<span class="muted">${arr.length}</span></h3>${arr.map(l => leadCard(l, `⏰ ${fmtDate(l.followUp)}`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('')}</div>`;
-  return head + grp.map(([t, c, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2><span class="dot d-${c}"></span>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div style="min-width:0"><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${esc(l.stage)}${l.notes.length ? ' · ' + esc(l.notes[l.notes.length - 1].text.slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm" onclick="event.stopPropagation();openChat('${l.id}')">WhatsApp</button><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
+  return head + grp.map(([t, c, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2><span class="dot d-${c}"></span>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div style="min-width:0"><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${esc(l.stage)}${l.notes.length ? ' · ' + esc(l.notes[l.notes.length - 1].text.slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm btn-wa" onclick="event.stopPropagation();openChat('${l.id}')"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg> WhatsApp</button><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
 }
 
 /* appointments: list / grid / calendar + meeting links */

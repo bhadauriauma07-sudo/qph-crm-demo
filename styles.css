@@ -482,3 +482,50 @@ details.trk summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--
 .hist .tl{max-height:520px;overflow-y:auto}
 .hist .tl li{flex-direction:column;gap:2px}
 .hist .tl li .t{min-width:0}
+
+/* =========================================================
+   WhatsApp — official green buttons + WhatsApp-style inbox
+   ========================================================= */
+.btn-wa,.btn-wa:hover{background:#25D366;color:#fff;border:0;filter:none!important}
+.btn-wa:hover{background:#1EBE5A}
+.wa-ic{flex:none}
+.lc-foot .btn-wa{padding:4px 7px}
+/* inbox shell */
+.wa{border:0;box-shadow:0 1px 3px rgba(0,0,0,.08);border-radius:10px}
+.wa-list{background:#fff;border-right:1px solid #E9EDEF}
+.wa-item{border-bottom:1px solid #F0F2F5;padding:11px 14px}
+.wa-item:hover{background:#F5F6F6}
+.wa-item.on{background:#F0F2F5}
+.wa-item b{color:#111B21;font-weight:600}
+.wa-item .small.muted{color:#667781}
+.wa-item .r{color:#667781}
+.wa-item .un{background:#25D366;color:#fff}
+/* chat header in WhatsApp green */
+.wa-ch{background:#008069;color:#fff;border-bottom:0;padding:10px 16px}
+.wa-ch .small.muted{color:#D9FDD3}
+.wa-ch .pill{background:rgba(255,255,255,.18);color:#fff;border-color:transparent}
+.wa-ch .pill::before{background:#fff!important}
+.wa-ch .btn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.35)}
+.wa-ch .btn:hover{background:rgba(255,255,255,.25);color:#fff}
+.wa-ch .btn-wa{background:#fff;color:#008069;border:0}
+.wa-ch .btn-wa:hover{background:#E7FCE3;color:#008069}
+.wa-ch .av{box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+.wa-tags{background:#F0F2F5;border-bottom:1px solid #E9EDEF}
+/* chat area */
+.wa-msgs{background-color:#EFEAE2;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23d9d2c5' stroke-width='1.2' opacity='.55'%3E%3Ccircle cx='14' cy='16' r='5'/%3E%3Cpath d='M52 10l6 6-6 6-6-6z'/%3E%3Cpath d='M20 52c4-6 10-6 14 0'/%3E%3Crect x='54' y='50' width='12' height='9' rx='2'/%3E%3C/g%3E%3C/svg%3E")}
+.msg{border-radius:8px;box-shadow:0 1px .5px rgba(11,20,26,.13);color:#111B21;padding:6px 9px 7px}
+.msg.in{background:#fff;border-top-left-radius:0}
+.msg.out{background:#D9FDD3;border-top-right-radius:0}
+.msg .t{color:#667781}
+.win24{background:#FFF5C4!important;color:#54656F!important;text-align:center;font-weight:500}
+/* composer */
+.wa-in{background:#F0F2F5;border-top:0;align-items:center}
+.wa-in input{border:0;background:#fff;border-radius:8px;padding:10px 12px}
+.wa-in .btn{background:#fff;border:0}
+.wa-send{width:42px;height:42px;border-radius:50%;border:0;background:#00A884;color:#fff;display:grid;place-items:center;flex:none}
+.wa-send:hover{background:#008F72}
+/* grid cards: never overflow */
+.lcard{min-width:0;overflow:hidden}
+.lc-top .pill{flex:none;max-width:48%;overflow:hidden;text-overflow:ellipsis}
+.lc-foot{flex-wrap:wrap}
+.lc-extra .btn{white-space:nowrap}
