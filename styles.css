@@ -464,3 +464,21 @@ a{color:var(--navy-2)}
 .ms-pop label:hover{background:#F5F7FA}
 .ms-pop input{width:15px;height:15px;accent-color:var(--navy)}
 .ms-f{display:flex;justify-content:space-between;gap:6px;border-top:1px solid var(--line);padding:6px 4px 2px;margin-top:4px;position:sticky;bottom:-6px;background:#fff}
+
+/* ---------- pending mandatory fields ---------- */
+.pending{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#FFFAF3;border:1px solid #F0DDBF;border-radius:12px;padding:12px 14px;margin:-4px 0 16px}
+.pending b{color:#8A5A14}
+.pending.ok{background:#F3F9F5;border-color:#CFE6D8}.pending.ok b{color:var(--green)}
+.pend-chips{display:flex;gap:6px;flex-wrap:wrap}
+.pend-chips button{border:1px solid #EBCFA3;background:#fff;color:#7A4F12;border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:600}
+.pend-chips button:hover{background:#FFF3E2}
+.form input.need,.form select.need{border-color:#E3B977;background:#FFFDF8}
+.need-t{display:block;font-size:11.5px;color:#9A6A1F;font-weight:600;margin-top:3px}
+.need-box{outline:1px dashed #E3B977;outline-offset:3px;border-radius:12px}
+.flash{animation:flash 1.3s ease}
+@keyframes flash{0%,60%{box-shadow:0 0 0 4px rgba(227,185,119,.55)}100%{box-shadow:none}}
+details.trk{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+details.trk summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--navy-2)}
+.hist .tl{max-height:520px;overflow-y:auto}
+.hist .tl li{flex-direction:column;gap:2px}
+.hist .tl li .t{min-width:0}

@@ -5,7 +5,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 8;
+const APP_V = 9;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -387,29 +387,34 @@ const has = v => v !== undefined && v !== null && String(v).trim() !== '';
 const CRIT = {
   'New': () => [],
   'Contacted': l => [
-    [normPhone(l.phone).length >= 8, 'Valid phone number on the lead'],
-    [l.contact.wa || l.contact.call || l.contact.email, 'Tick at least one: WhatsApp sent, Called or Email sent'],
+    [normPhone(l.phone).length >= 8, 'Valid phone number on the lead', 'phone'],
+    [l.contact.wa || l.contact.call || l.contact.email, 'Tick at least one: WhatsApp sent, Called or Email sent', 'contact'],
   ],
-  'Not Contacted': l => [[has(l.ncReason), 'Reason (not reachable, switched off, busy…)'], [has(l.retryAt), 'Retry date & time']],
-  'Follow-up': l => [...CRIT['Contacted'](l), [has(l.followUp), 'Follow-up date & time']],
-  'Appointment Booked': l => [...CRIT['Contacted'](l), [has(l.appt.at), 'Appointment date & time'], [has(l.appt.place), 'Meeting place']],
+  'Not Contacted': l => [[has(l.ncReason), 'Reason (not reachable, switched off, busy…)', 'ncReason'], [has(l.retryAt), 'Retry date & time', 'retryAt']],
+  'Follow-up': l => [...CRIT['Contacted'](l), [has(l.followUp), 'Follow-up date & time', 'followUp']],
+  'Appointment Booked': l => [...CRIT['Contacted'](l), [has(l.appt.at), 'Appointment date & time', 'appt.at'], [has(l.appt.place), 'Meeting place', 'appt.place']],
   'Qualified': l => [...CRIT['Contacted'](l),
-    [l.interested === 'Yes', 'Customer confirmed interested'],
-    [has(l.req.type), 'Jurisdiction (Free Zone / Mainland / Offshore)'],
-    [has(l.req.zone) && zoneOf(l.req.zone).type === l.req.type, l.req.type === 'Free Zone' ? 'Free zone selected' : 'Authority selected'],
-    [has(l.req.activity), 'Exact business activity'],
-    [has(l.req.visas), 'Number of visas'],
-    [has(l.nationality), 'Nationality']],
-  'Proposal Sent': l => [...CRIT['Qualified'](l), [l.proposals.some(p => p.pdf), 'Proposal PDF uploaded (or generated from calculator)']],
-  'Payment Link Sent': l => [...CRIT['Proposal Sent'](l), [l.payLink && +l.payLink.amount > 0, 'Payment amount'], [l.payLink && has(l.payLink.url), 'Payment link']],
+    [l.interested === 'Yes', 'Customer confirmed interested', 'interested'],
+    [has(l.req.type), 'Jurisdiction (Free Zone / Mainland / Offshore)', 'req.type'],
+    [has(l.req.zone) && zoneOf(l.req.zone).type === l.req.type, l.req.type === 'Free Zone' ? 'Free zone selected' : 'Authority selected', 'req.zone'],
+    [has(l.req.activity), 'Exact business activity', 'req.activity'],
+    [has(l.req.visas), 'Number of visas', 'req.visas'],
+    [has(l.nationality), 'Nationality', 'nationality']],
+  'Proposal Sent': l => [...CRIT['Qualified'](l), [l.proposals.some(p => p.pdf), 'Proposal PDF uploaded (or generated from calculator)', 'proposal']],
+  'Payment Link Sent': l => [...CRIT['Proposal Sent'](l), [l.payLink && +l.payLink.amount > 0, 'Payment amount', 'payLink.amount'], [l.payLink && has(l.payLink.url), 'Payment link', 'payLink.url']],
   'Payment Received': l => [...CRIT['Proposal Sent'](l),
-    [l.payment && +l.payment.amount > 0, 'Amount received'], [l.payment && has(l.payment.mode), 'Payment mode'],
-    [l.payment && has(l.payment.ref), 'Reference / transaction code'],
-    [l.payment && l.payment.status === 'confirmed', 'Confirmed by Accounts team']],
+    [l.payment && +l.payment.amount > 0, 'Amount received', 'payment.amount'], [l.payment && has(l.payment.mode), 'Payment mode', 'payment.mode'],
+    [l.payment && has(l.payment.ref), 'Reference / transaction code', 'payment.ref'],
+    [l.payment && l.payment.status === 'confirmed', 'Confirmed by Accounts team', 'payment.confirm']],
   'Closed Won': l => [...CRIT['Payment Received'](l)],
   'Lost': l => [[has(l.reason), 'Lost reason']], 'Junk': l => [[has(l.reason), 'Junk reason']],
 };
 const missing = (l, s) => (CRIT[s] ? CRIT[s](l) : []).filter(c => !c[0]).map(c => c[1]);
+const missingP = (l, s) => (CRIT[s] ? CRIT[s](l) : []).filter(c => !c[0]);
+/* the stage the salesperson is working towards right now */
+function goalStage(l) { return { 'New': 'Contacted', 'Not Contacted': 'Contacted', 'Contacted': 'Qualified', 'Follow-up': 'Qualified', 'Appointment Booked': 'Qualified', 'Qualified': 'Proposal Sent', 'Proposal Sent': 'Payment Link Sent', 'Payment Link Sent': 'Payment Received', 'Payment Received': 'Closed Won' }[l.stage] || null; }
+let NEED = new Set(), NEED_FOR = '';
+function goField(p) { const el = document.querySelector(`[data-path="${p}"]`); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); const f = el.matches('input,select') ? el : el.querySelector('input,select'); if (f) setTimeout(() => f.focus(), 350); }
 function nextStage(l) { const i = PIPE.indexOf(l.stage); return i >= 0 && i < PIPE.length - 1 ? (l.stage === 'New' ? 'Contacted' : PIPE[i + 1]) : (l.stage === 'Not Contacted' ? 'Contacted' : null); }
 function tryStage(id, s) {
   const l = S.leads.find(x => x.id === id); if (s === l.stage) return;
@@ -459,8 +464,8 @@ function setL(id, path, val) {
   if (changed) autoToast(autoAdvance(l));
   save(); render();
 }
-function inp(l, path, type = 'text', extra = '') { const v = path.split('.').reduce((o, k) => (o || {})[k], l); const val = type === 'datetime-local' ? (v ? toInput(v) : '') : (v ?? ''); const conv = type === 'datetime-local' ? 'this.value?new Date(this.value).getTime():null' : type === 'number' ? "this.value===''?'':+this.value" : 'this.value'; return `<input type="${type}" value="${esc(val)}" ${extra} onchange="setL('${l.id}','${path}',${conv})">`; }
-function sel(l, path, opts, ph = 'Select…') { const v = path.split('.').reduce((o, k) => (o || {})[k], l) ?? ''; return `<select onchange="setL('${l.id}','${path}',this.value)"><option value="">${ph}</option>${opts.map(o => { const [k, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>`; }
+function inp(l, path, type = 'text', extra = '') { const v = path.split('.').reduce((o, k) => (o || {})[k], l); const val = type === 'datetime-local' ? (v ? toInput(v) : '') : (v ?? ''); const conv = type === 'datetime-local' ? 'this.value?new Date(this.value).getTime():null' : type === 'number' ? "this.value===''?'':+this.value" : 'this.value'; return `<input type="${type}" data-path="${path}" class="${NEED.has(path) ? 'need' : ''}" value="${esc(val)}" ${extra} onchange="setL('${l.id}','${path}',${conv})">${NEED.has(path) ? `<span class="need-t">Required for ${esc(NEED_FOR)}</span>` : ''}`; }
+function sel(l, path, opts, ph = 'Select…') { const v = path.split('.').reduce((o, k) => (o || {})[k], l) ?? ''; return `<select data-path="${path}" class="${NEED.has(path) ? 'need' : ''}" onchange="setL('${l.id}','${path}',this.value)"><option value="">${ph}</option>${opts.map(o => { const [k, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(t)}</option>`; }).join('')}</select>${NEED.has(path) ? `<span class="need-t">Required for ${esc(NEED_FOR)}</span>` : ''}`; }
 const req = (label, ok) => `<label>${label}${ok === false ? ' <b style="color:var(--red)">*</b>' : ok ? ' <span style="color:var(--green)">✓</span>' : ''}</label>`;
 
 function leadPage() {
@@ -468,7 +473,7 @@ function leadPage() {
   const L = leadNavList(); const pos = L.findIndex(x => x.id === l.id);
   const o = l.dupOf ? S.leads.find(x => x.id === l.dupOf) : null; const kids = dupsOf(l.id);
   const a = l.attr; const u = a.utm || {}; const ci = PIPE.indexOf(l.stage);
-  const nx = nextStage(l); const nxCrit = nx ? CRIT[nx](l) : [];
+  const goal = goalStage(l); const pend = goal && !['Lost', 'Junk'].includes(l.stage) ? missingP(l, goal) : []; NEED = new Set(pend.map(c => c[2])); NEED_FOR = goal || '';
   const isClosed = ['Lost', 'Junk'].includes(l.stage);
   const zonesOfType = S.zones.filter(z => z.type === l.req.type);
   const qmiss = c => !has(c);
@@ -493,6 +498,7 @@ function leadPage() {
     ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">🗑 Delete</button>` : ''}
   </div>
   <div class="pipe">${PIPE.map((s, i) => { const side = s === 'Follow-up' || s === 'Appointment Booked'; const done = !isClosed && ci > i && (!side || !missing(l, s).length); const skipped = !isClosed && ci > i && !done; const cur = l.stage === s; const lock = !done && !cur && !skipped && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''} ${lock ? 'lock' : ''}" onclick="tryStage('${l.id}','${s}')" title="${lock ? 'Locked — needs: ' + esc(missing(l, s).join(', ')) : s}">${lock ? '🔒 ' : done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
+  ${pend.length ? `<div class="pending"><div><b>⚠ ${pend.length} mandatory field${pend.length > 1 ? 's' : ''} pending for ${esc(goal)}</b><div class="small muted">Fill these and the lead moves to ${esc(goal)} automatically${goal === 'Closed Won' ? ' (Closed Won is confirmed by click)' : ''}.</div></div><div class="pend-chips">${pend.map(c => `<button onclick="goField('${c[2]}')">${esc(c[1])} →</button>`).join('')}</div></div>` : goal && !isClosed ? `<div class="pending ok"><b>✅ All details for ${esc(goal)} are filled</b>${goal === 'Closed Won' ? `<button class="btn btn-sm btn-primary" onclick="tryStage('${l.id}','Closed Won')">Mark Closed Won</button>` : ''}</div>` : ''}
   ${isClosed ? `<div class="dup-box"><b>${esc(l.stage)}</b><span>Reason: ${esc(l.reason)}</span><button class="btn btn-sm" onclick="tryStage('${l.id}','New')">Re-open as New</button></div>` : ''}
 
   <div class="lp-grid"><div class="lp-main">
@@ -506,7 +512,8 @@ function leadPage() {
         <button class="${ci >= 1 ? 'on ok' : ''}" onclick="tryStage('${l.id}','Contacted')">✓ Contacted</button>
         <button class="${l.stage === 'Not Contacted' ? 'on bad' : ''}" onclick="tryStage('${l.id}','Not Contacted')">✕ Not contacted</button>
       </div>
-      <div class="chk-row">${[['wa', 'WhatsApp sent'], ['call', 'Called'], ['email', 'Email sent']].map(([k, t]) => `<label class="chk ${l.contact[k] ? 'on' : ''}"><input type="checkbox" ${l.contact[k] ? 'checked' : ''} onchange="setL('${l.id}','contact.${k}',this.checked)"> ${t}</label>`).join('')}</div>
+      <div class="chk-row ${NEED.has('contact') ? 'need-box' : ''}" data-path="contact">${[['wa', 'WhatsApp sent'], ['call', 'Called'], ['email', 'Email sent']].map(([k, t]) => `<label class="chk ${l.contact[k] ? 'on' : ''}"><input type="checkbox" ${l.contact[k] ? 'checked' : ''} onchange="setL('${l.id}','contact.${k}',this.checked)"> ${t}</label>`).join('')}</div>
+      ${NEED.has('contact') ? `<div class="need-t" style="margin-top:6px">Tick WhatsApp sent, Called or Email sent — required for ${esc(NEED_FOR)}</div>` : ''}
       <div class="form" style="margin-top:10px"><div>${req('If not contacted — reason')}${sel(l, 'ncReason', NOT_CONTACTED_REASONS)}</div><div>${req('Retry at')}${inp(l, 'retryAt', 'datetime-local')}</div></div>
       <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Junk')">🗑 Mark junk</button><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Lost')">Mark lost</button></div>
     </div></div>
@@ -518,7 +525,7 @@ function leadPage() {
       <div>${req('Jurisdiction', !qmiss(l.req.type) || false)}${sel(l, 'req.type', ['Free Zone', 'Mainland', 'Offshore'])}</div>
       <div>${req(l.req.type === 'Free Zone' ? 'Free zone' : 'Authority', (has(l.req.zone) && zoneOf(l.req.zone).type === l.req.type) || false)}${sel(l, 'req.zone', zonesOfType.map(z => [z.id, z.name]))}</div>
       <div>${req('Nationality', !qmiss(l.nationality) || false)}${sel(l, 'nationality', NATIONALITIES)}</div>
-      <div>${req('Exact business activity', !qmiss(l.req.activity) || false)}<input list="actList" value="${esc(l.req.activity || '')}" placeholder="e.g. General Trading" onchange="setL('${l.id}','req.activity',this.value)"><datalist id="actList">${ACTIVITIES.map(x => `<option>${x}</option>`).join('')}</datalist></div>
+      <div>${req('Exact business activity', !qmiss(l.req.activity) || false)}<input list="actList" data-path="req.activity" class="${NEED.has('req.activity') ? 'need' : ''}" value="${esc(l.req.activity || '')}" placeholder="e.g. General Trading" onchange="setL('${l.id}','req.activity',this.value)"><datalist id="actList">${ACTIVITIES.map(x => `<option>${x}</option>`).join('')}</datalist>${NEED.has('req.activity') ? `<span class="need-t">Required for ${esc(NEED_FOR)}</span>` : ''}</div>
       <div>${req('When to start')}${sel(l, 'start', ['Immediately', 'Within 1 month', '1–3 months', 'Just exploring'])}</div>
       <div>${req('Budget (AED)')}${inp(l, 'budget', 'number')}</div><div>${req('Hot / Warm / Cold')}${sel(l, 'temp', ['Hot', 'Warm', 'Cold'], '—')}</div><div>${req('Estimated deal value')}<input value="${aed(l.value)}" disabled></div>
     </div></div></div>
@@ -530,12 +537,12 @@ function leadPage() {
       <div class="full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn-sm btn-navy" onclick="apptModal('${l.id}')">📅 Schedule meeting & send invite</button>${l.appt && l.appt.link ? `<span class="small">Link: <a href="${esc(l.appt.link)}" target="_blank">${esc(l.appt.link)}</a></span>` : '<span class="small muted">Creates a Zoom / Google Meet link and sends it by email + WhatsApp</span>'}</div>
     </div></div></div>
 
-    <div class="card"><div class="card-h"><h2>4 · Proposal</h2><span class="small muted">Unlocks: Proposal Sent — PDF required</span></div><div class="card-b">
+    <div class="card ${NEED.has('proposal') ? 'need-box' : ''}" data-path="proposal"><div class="card-h"><h2>4 · Proposal</h2><span class="small muted">Unlocks: Proposal Sent — PDF required</span></div><div class="card-b">
       ${l.proposals.map((p, i) => `<div class="qrow"><span>📄 <b>${esc(p.pdf || 'No PDF')}</b> · ${esc(zoneOf(p.zone).name)} · ${p.visas} visa(s) · ${fmtDate(p.at, false)} ${p.uploaded ? '<span class="tag">uploaded</span>' : '<span class="tag">generated</span>'}</span><span style="display:flex;gap:6px;align-items:center"><b>${p.total ? aed(p.total) : ''}</b><button class="btn btn-sm" onclick="viewProposal('${l.id}',${i})">View</button></span></div>`).join('') || '<div class="muted small">No proposal yet.</div>'}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm btn-primary" onclick="proposalFor('${l.id}')">🧮 Create with calculator</button><label class="btn btn-sm">⬆ Upload proposal PDF<input type="file" accept="application/pdf" hidden onchange="uploadPdf('${l.id}',this)"></label><span class="small muted">or send from WhatsApp after it's attached</span></div>
     </div></div>
 
-    <div class="card"><div class="card-h"><h2>5 · Payment</h2><span class="small muted">Payment Received needs Accounts confirmation</span></div><div class="card-b">
+    <div class="card ${NEED.has('payment.confirm') ? 'need-box' : ''}" data-path="payment.confirm"><div class="card-h"><h2>5 · Payment</h2><span class="small muted">Payment Received needs Accounts confirmation</span></div><div class="card-b">
       <div class="small" style="font-weight:700;margin-bottom:6px">Payment link</div>
       <div class="form" style="margin:0"><div>${req('Amount (AED)', (l.payLink && +l.payLink.amount > 0) || undefined)}${inp(l, 'payLink.amount', 'number')}</div><div>${req('Payment link', (l.payLink && has(l.payLink.url)) || undefined)}<div style="display:flex;gap:6px">${inp(l, 'payLink.url', 'url', 'placeholder="https://pay…"')}<button class="btn btn-sm" onclick="setL('${l.id}','payLink.url','https://pay.quickpathhorizon.com/${l.id}')">Generate</button></div></div></div>
       <div class="small" style="font-weight:700;margin:16px 0 6px">Payment received</div>
@@ -550,19 +557,15 @@ function leadPage() {
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ai btn-sm" onclick="$('noteIn').value=polish($('noteIn').value);toast('✨ Polished by AI Agent')">✨ Polish to English</button><button class="btn btn-primary btn-sm" onclick="addNote('${l.id}')">Save note</button></div>
       ${[...l.notes].reverse().map((n, i) => `<div class="note"><div class="meta">${esc(user(n.by).name)} · ${fmtDate(n.at)} ${n.polished ? '<span class="ai">✨ AI polished</span>' : ''}</div><div>${esc(n.text)}</div>${!n.polished ? `<button class="btn btn-sm" style="margin-top:4px;padding:2px 8px" onclick="polishNote('${l.id}',${l.notes.length - 1 - i})">✨ Polish</button>` : ''}</div>`).join('') || '<div class="muted small" style="margin-top:10px">No notes yet</div>'}
     </div></div>
-    <div class="card"><div class="card-h"><h2>🕑 Timeline</h2></div><div class="card-b"><ul class="tl">${[...l.activity].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
   </div>
 
   <div class="lp-side">
     <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:10px">Lead overview</h3>
       <div class="ov"><span class="muted small">Current stage</span><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(l.stage)}</b>${l.temp === 'Hot' ? pill('🔥 Hot', 'p-hot') : pill(l.temp)}</div></div>
       <div class="kv1">${[['Owner', user(l.owner).name], ['Source', l.source + (a.platform ? ' – ' + a.platform : '')], ['Campaign', a.campaign || '—'], ['Ad set', a.adset || '—'], ['Ad name', a.ad || '—'], ['Created', fmtDate(l.createdAt)], ['Last update', ago(l.updatedAt || l.createdAt)]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    <details class="trk"><summary>Source & UTM details</summary><div class="kv1">${[['Form', a.form], ['Landing page', a.landing], ['utm_source', u.utm_source], ['utm_medium', u.utm_medium], ['utm_campaign', u.utm_campaign], ['utm_term', u.utm_term], ['utm_content', u.utm_content], ['Click ID', a.clickId]].map(([k, v]) => `<div><span>${k}</span><b class="${k.startsWith('utm') || k === 'Click ID' ? 'mono' : ''}">${esc(v || '—')}</b></div>`).join('')}</div></details>
     </div></div>
-    ${nx && !isClosed ? `<div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:4px">Next: ${esc(nx)}</h3><div class="small muted" style="margin-bottom:8px">${nxCrit.filter(c => c[0]).length}/${nxCrit.length} criteria met</div><div class="bar" style="margin-bottom:10px"><i style="width:${nxCrit.length ? nxCrit.filter(c => c[0]).length / nxCrit.length * 100 : 100}%"></i></div><ul class="crit">${nxCrit.map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px" ${missing(l, nx).length ? 'disabled' : ''} onclick="tryStage('${l.id}','${nx}')">Move to ${esc(nx)} →</button></div></div>` : ''}
-    <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">Contact</h3><ul class="crit">
-      <li class="${ci >= 1 ? 'ok' : ''}">${ci >= 1 ? '✓' : '○'} Contacted</li><li class="${l.contact.wa ? 'ok' : ''}">${l.contact.wa ? '✓' : '○'} WhatsApp sent</li><li class="${l.contact.call ? 'ok' : ''}">${l.contact.call ? '✓' : '○'} Called</li><li class="${l.contact.email ? 'ok' : ''}">${l.contact.email ? '✓' : '○'} Email sent</li><li class="${l.notes.length ? 'ok' : ''}">${l.notes.length ? '✓' : '○'} ${l.notes.length} note${l.notes.length === 1 ? '' : 's'}</li><li class="${(l.emails || []).length ? 'ok' : ''}">${(l.emails || []).length ? '✓' : '○'} ${(l.emails || []).length} email(s) sent${(l.emails || []).length ? ' · last: ' + esc(l.emails[l.emails.length - 1].subject) : ''}</li>
-    </ul><a class="btn btn-wa btn-sm" style="width:100%;justify-content:center;margin-top:10px" onclick="openChat('${l.id}')">💬 Open WhatsApp chat</a></div></div>
-    <div class="card attr"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">📍 Source & tracking</h3><div class="kv1">${[['Platform', a.platform], ['Campaign', a.campaign], ['Ad set / group', a.adset], ['Ad name', a.ad], ['Form', a.form], ['Landing page', a.landing], ['utm_source', u.utm_source], ['utm_medium', u.utm_medium], ['utm_campaign', u.utm_campaign], ['utm_term', u.utm_term], ['utm_content', u.utm_content], ['Click ID', a.clickId]].map(([k, v]) => `<div><span>${k}</span><b class="${k.startsWith('utm') || k === 'Click ID' ? 'mono' : ''}">${esc(v || '—')}</b></div>`).join('')}</div>${(l.touches || []).length ? `<div class="small muted" style="margin-top:8px"><b>Merged touches:</b> ${l.touches.map(t => `${esc(t.source)} · ${esc(t.attr.campaign || '')}`).join(' · ')}</div>` : ''}</div></div>
+    <div class="card hist"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">History</h3><ul class="tl">${[...l.activity].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
   </div></div></div>`;
 }
 
@@ -580,7 +583,7 @@ function viewProposal(id, i) {
 }
 function sendPay(id) {
   const l = S.leads.find(x => x.id === id); const p = l.payment || {};
-  const m = [[+p.amount > 0, 'Amount received'], [has(p.mode), 'Payment mode'], [has(p.ref), 'Reference / transaction code'], [has(p.date), 'Payment date']].filter(c => !c[0]).map(c => c[1]);
+  const m = [[+p.amount > 0, 'Amount received', 'payment.amount'], [has(p.mode), 'Payment mode', 'payment.mode'], [has(p.ref), 'Reference / transaction code', 'payment.ref'], [has(p.date), 'Payment date']].filter(c => !c[0]).map(c => c[1]);
   if (m.length) return toast('Fill: ' + m.join(', '));
   Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); notify('u1', `💰 Confirm payment ${aed(p.amount)} · ref ${p.ref} · ${l.name}`, l.id); save(); render(); toast('⏳ Sent to Accounts (Faisal) for confirmation');
 }
