@@ -5,7 +5,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 11;
+const APP_V = 12;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -613,7 +613,7 @@ function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadI
 
 /* ---------------- add / simulate ---------------- */
 function addLeadModal() {
-  modal(`<h2>+ Add lead</h2><div class="muted small">Walk-in, call or referral. Duplicate check runs as you type.</div><div class="form">
+  modal(`<h2>+ Create lead</h2><div class="muted small">Walk-in, call or referral. Duplicate check runs as you type.</div><div class="form">
     <div><label>Full name *</label><input id="nName"></div><div><label>Phone *</label><input id="nPhone" placeholder="+971 5x xxx xxxx" oninput="liveDup()"></div>
     <div><label>Email</label><input id="nEmail" oninput="liveDup()"></div><div><label>Nationality</label><select id="nNat">${NATIONALITIES.map(n => `<option>${n}</option>`).join('')}</select></div>
     <div><label>Source</label><select id="nSrc">${SOURCES.map(n => `<option ${n === 'Walk-in' ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div><label>Service</label><select id="nSvc">${SERVICES.map(n => `<option>${n}</option>`).join('')}</select></div>
