@@ -1,10 +1,10 @@
 /* QPH CRM demo - constants and seed data */
 const TEAM = [
-  { id: 'u1', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager & Accounts', color: '#1E3A5F' },
-  { id: 'u2', name: 'Aisha Khan', role: 'sales', title: 'Sales Executive', color: '#486581' },
-  { id: 'u3', name: 'Rohan Verma', role: 'sales', title: 'Sales Executive', color: '#627D98' },
-  { id: 'u4', name: 'Sara Ali', role: 'ops', title: 'Operations Executive', color: '#3E6B67' },
-  { id: 'u5', name: 'Imran Sheikh', role: 'ops', title: 'Operations Executive', color: '#6B5E7B' },
+  { id: 'u1', email: 'faisal@quickpathhorizon.com', phone: '+971 50 111 2201', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager & Accounts', color: '#1E3A5F' },
+  { id: 'u2', email: 'aisha@quickpathhorizon.com', phone: '+971 50 111 2202', name: 'Aisha Khan', role: 'sales', title: 'Sales Executive', color: '#486581' },
+  { id: 'u3', email: 'rohan@quickpathhorizon.com', phone: '+971 50 111 2203', name: 'Rohan Verma', role: 'sales', title: 'Sales Executive', color: '#627D98' },
+  { id: 'u4', email: 'sara@quickpathhorizon.com', phone: '+971 50 111 2204', name: 'Sara Ali', role: 'ops', title: 'Operations Executive', color: '#3E6B67' },
+  { id: 'u5', email: 'imran@quickpathhorizon.com', phone: '+971 50 111 2205', name: 'Imran Sheikh', role: 'ops', title: 'Operations Executive', color: '#6B5E7B' },
 ];
 
 const STAGES = ['New', 'Contacted', 'Not Contacted', 'Follow-up', 'Appointment Booked', 'Qualified', 'Proposal Sent', 'Payment Link Sent', 'Payment Received', 'Closed Won', 'Lost', 'Junk'];

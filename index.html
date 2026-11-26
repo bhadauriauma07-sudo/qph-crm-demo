@@ -8,16 +8,34 @@
 <link rel="icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
 <div id="login" class="login" hidden>
-  <div class="login-card">
-    <img src="logo.png" alt="Quick Path Horizon">
-    <h1>CRM Login</h1>
-    <p class="muted">Demo mode: pick a team member to see their dashboard.</p>
-    <div id="loginUsers" class="login-users"></div>
-    <div class="demo-note">Demo build · data stays in this browser only</div>
+  <div class="auth">
+    <aside class="auth-art">
+      <div class="aa-top"><span class="aa-brand">QPH CRM</span><span class="aa-sub">Quick Path Horizon · Corporate Services</span></div>
+      <div class="aa-copy">
+        <h2>Every enquiry, from first ad click to trade licence.</h2>
+        <p>Leads from Meta, Google, website and WhatsApp land in one place, move through clear stages and hand over to operations automatically.</p>
+      </div>
+      <div class="aa-mock">
+        <div class="aa-stats">
+          <div><span>New leads today</span><b>12</b></div>
+          <div><span>Qualified</span><b>5</b></div>
+          <div><span>Payments</span><b>AED 48k</b></div>
+        </div>
+        <div class="aa-card">
+          <div class="aa-row"><span class="aa-av">MA</span><div><b>Mohammed Al Hashimi</b><small>Meta · Freezone Setup · 2 visas</small></div><em class="aa-pill">New</em></div>
+          <div class="aa-row"><span class="aa-av">PS</span><div><b>Priya Sharma</b><small>Google · Business Setup Dubai</small></div><em class="aa-pill q">Qualified</em></div>
+          <div class="aa-row"><span class="aa-av">JW</span><div><b>James Wilson</b><small>Website · Mainland company</small></div><em class="aa-pill p">Proposal Sent</em></div>
+        </div>
+        <div class="aa-pipe"><i style="width:100%"></i><i style="width:72%"></i><i style="width:48%"></i><i style="width:30%"></i><i style="width:18%"></i></div>
+        <div class="aa-pipe-l"><span>New</span><span>Contacted</span><span>Qualified</span><span>Proposal</span><span>Won</span></div>
+      </div>
+      <div class="aa-foot">© Quick Path Horizon · Dubai, UAE</div>
+    </aside>
+    <main class="auth-form"><div class="auth-box" id="authBox"></div></main>
   </div>
 </div>
 
@@ -27,7 +45,7 @@
     <nav id="nav"></nav>
     <div class="side-foot">
       <div class="me" id="me"></div>
-      <button class="btn btn-sm" id="logoutBtn">Switch user</button>
+      <button class="btn btn-sm" id="logoutBtn">Log out</button>
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -46,7 +64,7 @@
 <div class="drawer-bg" id="drawerBg"><aside class="drawer" id="drawer"></aside></div>
 <div class="modal-bg" id="modal"><div class="modal" id="modalBody"></div></div>
 <div class="toast" id="toast"></div>
-<script src="data.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="data.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 14;
+const APP_V = 15;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -165,17 +165,64 @@ function ingest(d) {
 
 /* ---------------- boot / login ---------------- */
 function boot() {
-  const uid = sessionStorage.getItem('qph_uid');
+  const uid = localStorage.getItem('qph_uid') || sessionStorage.getItem('qph_uid');
   ME = TEAM.find(t => t.id === uid) || null;
-  if (!ME) { $('login').hidden = false; $('app').hidden = true; $('loginUsers').innerHTML = TEAM.map(t => `<button class="login-user" onclick="login('${t.id}')">${av(t.id, 36)}<div><b>${esc(t.name)}</b><span class="muted small">${esc(t.title)}</span></div><span class="role pill ${t.role === 'admin' ? 'p-qualified' : t.role === 'sales' ? 'p-new' : 'p-contacted'}">${t.role === 'ops' ? 'Operations' : t.role === 'admin' ? 'Admin' : 'Sales'}</span></button>`).join(''); return; }
+  if (!ME) { $('login').hidden = false; $('app').hidden = true; authStep1(); return; }
   $('login').hidden = true; $('app').hidden = false;
   $('me').innerHTML = `${av(ME.id, 32)}<div style="min-width:0"><b>${esc(ME.name)}</b><span>${esc(ME.title)}</span></div>`;
   $('addLeadBtn').hidden = ME.role === 'ops';
   route = (location.hash.slice(1) || 'dashboard'); if (!navItems().some(n => n.id === route)) route = 'dashboard';
   render();
 }
-function login(id) { sessionStorage.setItem('qph_uid', id); location.hash = 'dashboard'; boot(); toast('Logged in as ' + user(id).name); }
-$('logoutBtn').onclick = () => { sessionStorage.removeItem('qph_uid'); closeDrawer(); boot(); };
+function login(id) { localStorage.setItem('qph_uid', id); sessionStorage.removeItem('qph_uid'); location.hash = 'dashboard'; boot(); toast('Signed in as ' + user(id).name); }
+$('logoutBtn').onclick = () => { localStorage.removeItem('qph_uid'); sessionStorage.removeItem('qph_uid'); closeDrawer(); boot(); };
+
+/* ---------------- OTP sign-in (demo: code shown on screen; live: sent by email / SMS) ---------------- */
+let AUTH = { mode: 'email', value: '', uid: null, code: '', exp: 0, err: '' };
+const mask = (v, mode) => mode === 'email' ? v.replace(/^(.)(.*)(@.*)$/, (m, a, b, c) => a + '*'.repeat(Math.max(2, b.length)) + c) : v.replace(/\d(?=\d{3})/g, '•');
+function authStep1() {
+  const isE = AUTH.mode === 'email';
+  $('authBox').innerHTML = `<img class="auth-logo" src="logo.png" alt="Quick Path Horizon">
+  <h1>Sign in</h1><p class="muted">Use your work email or mobile number. We'll send you a one-time code.</p>
+  <div class="seg auth-seg"><button class="${isE ? 'on' : ''}" onclick="AUTH.mode='email';AUTH.err='';authStep1()">Email</button><button class="${!isE ? 'on' : ''}" onclick="AUTH.mode='phone';AUTH.err='';authStep1()">Mobile number</button></div>
+  <label class="auth-l">${isE ? 'Work email' : 'Mobile number'}</label>
+  <input id="authIn" class="auth-in" type="${isE ? 'email' : 'tel'}" autocomplete="${isE ? 'email' : 'tel'}" placeholder="${isE ? 'name@quickpathhorizon.com' : '+971 5X XXX XXXX'}" value="${esc(AUTH.value)}" onkeydown="if(event.key==='Enter')sendOtp()">
+  ${AUTH.err ? `<div class="auth-err">${esc(AUTH.err)}</div>` : ''}
+  <button class="btn btn-primary auth-btn" onclick="sendOtp()">Send OTP</button>
+  <details class="auth-demo"><summary>Demo accounts</summary><div>${TEAM.map(t => `<button onclick="AUTH.value='${isE ? t.email : t.phone}';authStep1()"><span>${esc(t.name)}</span><small>${esc(isE ? t.email : t.phone)} · ${t.role === 'ops' ? 'Operations' : t.role === 'admin' ? 'Admin' : 'Sales'}</small></button>`).join('')}</div></details>
+  <p class="auth-note">Demo build · data stays in this browser</p>`;
+  setTimeout(() => $('authIn') && $('authIn').focus(), 30);
+}
+function sendOtp() {
+  const v = $('authIn').value.trim(); AUTH.value = v;
+  if (!v) { AUTH.err = AUTH.mode === 'email' ? 'Enter your work email' : 'Enter your mobile number'; return authStep1(); }
+  const t = AUTH.mode === 'email' ? TEAM.find(x => x.email.toLowerCase() === v.toLowerCase()) : TEAM.find(x => normPhone(x.phone) === normPhone(v));
+  if (!t) { AUTH.err = 'This ' + (AUTH.mode === 'email' ? 'email' : 'number') + ' is not registered. Ask your admin to add you in Settings → Team.'; return authStep1(); }
+  AUTH = Object.assign(AUTH, { uid: t.id, code: String(Math.floor(100000 + Math.random() * 900000)), exp: Date.now() + 5 * 60e3, err: '', sentAt: Date.now() });
+  authStep2();
+}
+function authStep2() {
+  const left = Math.max(0, 30 - Math.round((Date.now() - AUTH.sentAt) / 1000));
+  $('authBox').innerHTML = `<img class="auth-logo" src="logo.png" alt="Quick Path Horizon">
+  <h1>Enter the code</h1><p class="muted">We sent a 6-digit code to <b>${esc(mask(AUTH.value, AUTH.mode))}</b>.</p>
+  <div class="otp">${[0, 1, 2, 3, 4, 5].map(i => `<input inputmode="numeric" maxlength="1" data-i="${i}" oninput="otpIn(this)" onkeydown="otpKey(event,this)">`).join('')}</div>
+  ${AUTH.err ? `<div class="auth-err">${esc(AUTH.err)}</div>` : ''}
+  <div class="auth-demo-code">Demo OTP: <b>${AUTH.code}</b><small>In the live CRM this code is sent by ${AUTH.mode === 'email' ? 'email' : 'SMS / WhatsApp'}.</small></div>
+  <button class="btn btn-primary auth-btn" onclick="verifyOtp()">Verify & sign in</button>
+  <div class="auth-links"><a onclick="AUTH.err='';authStep1()">← Change ${AUTH.mode === 'email' ? 'email' : 'number'}</a>${left ? `<span class="muted">Resend in ${left}s</span>` : `<a onclick="sendOtpAgain()">Resend code</a>`}</div>`;
+  setTimeout(() => { const f = document.querySelector('.otp input'); if (f) f.focus(); }, 30);
+  clearTimeout(authStep2.t); if (left) authStep2.t = setTimeout(() => { if (!$('login').hidden && document.querySelector('.otp')) { const vals = [...document.querySelectorAll('.otp input')].map(i => i.value); authStep2(); document.querySelectorAll('.otp input').forEach((i, k) => i.value = vals[k] || ''); } }, 1000);
+}
+function sendOtpAgain() { AUTH.code = String(Math.floor(100000 + Math.random() * 900000)); AUTH.exp = Date.now() + 5 * 60e3; AUTH.sentAt = Date.now(); AUTH.err = ''; authStep2(); toast('New code sent'); }
+function otpIn(el) { el.value = el.value.replace(/\D/g, '').slice(-1); if (el.value && el.nextElementSibling) el.nextElementSibling.focus(); if ([...document.querySelectorAll('.otp input')].every(i => i.value)) verifyOtp(); }
+function otpKey(e, el) { if (e.key === 'Backspace' && !el.value && el.previousElementSibling) el.previousElementSibling.focus(); if (e.key === 'Enter') verifyOtp(); }
+function verifyOtp() {
+  const code = [...document.querySelectorAll('.otp input')].map(i => i.value).join('');
+  if (code.length < 6) { AUTH.err = 'Enter all 6 digits'; return authStep2(); }
+  if (Date.now() > AUTH.exp) { AUTH.err = 'Code expired. Tap Resend code.'; return authStep2(); }
+  if (code !== AUTH.code) { AUTH.err = 'Wrong code. Please check and try again.'; return authStep2(); }
+  clearTimeout(authStep2.t); const uid = AUTH.uid; AUTH = { mode: AUTH.mode, value: '', uid: null, code: '', exp: 0, err: '' }; login(uid);
+}
 $('menuBtn').onclick = () => { $('side').classList.toggle('open'); $('scrim').classList.toggle('open'); };
 $('scrim').onclick = () => { $('side').classList.remove('open'); $('scrim').classList.remove('open'); };
 $('addLeadBtn').onclick = () => addLeadModal();
@@ -833,7 +880,7 @@ function renew(id) { const c = S.cases.find(x => x.id === id); c.licenceExpiry =
 function vSettings() {
   const tabs = [['team', 'Team & roles'], ['assign', 'Round robin & notifications'], ['email', 'Email'], ['integrations', 'Lead sources & integrations'], ['utm', 'UTM tester'], ['prices', 'Price list'], ['spend', 'Ad spend'], ['data', 'Data']];
   let b = '';
-  if (setTab === 'team') b = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Dashboard</th><th>Can do</th><th>Cannot do</th></tr></thead><tbody>${TEAM.map(t => `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 28)}<b>${esc(t.name)}</b></div></td><td>${esc(t.title)}</td><td>${t.role === 'admin' ? 'Company dashboard' : t.role === 'sales' ? 'Sales dashboard (own leads)' : 'Operations dashboard'}</td><td class="small">${t.role === 'admin' ? 'Everything: all leads, campaigns, ops, settings, delete, reassign' : t.role === 'sales' ? 'Own leads, follow-ups, WhatsApp, calculator & proposals, duplicates' : 'Ops board, documents, licences, visas, customers, renewals'}</td><td class="small">${t.role === 'admin' ? '-' : t.role === 'sales' ? "Other reps' leads, operations documents, delete" : 'Sales leads & campaigns, delete'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">Demo: 5 users. Live version uses email OTP login per user. New leads are split round-robin between sales; Closed Won cases round-robin between operations.</p>`;
+  if (setTab === 'team') b = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Dashboard</th><th>Can do</th><th>Cannot do</th></tr></thead><tbody>${TEAM.map(t => `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 28)}<div><b>${esc(t.name)}</b><span class="sub">${esc(t.email)} · ${esc(t.phone)}</span></div></div></td><td>${esc(t.title)}</td><td>${t.role === 'admin' ? 'Company dashboard' : t.role === 'sales' ? 'Sales dashboard (own leads)' : 'Operations dashboard'}</td><td class="small">${t.role === 'admin' ? 'Everything: all leads, campaigns, ops, settings, delete, reassign' : t.role === 'sales' ? 'Own leads, follow-ups, WhatsApp, calculator & proposals, duplicates' : 'Ops board, documents, licences, visas, customers, renewals'}</td><td class="small">${t.role === 'admin' ? '-' : t.role === 'sales' ? "Other reps' leads, operations documents, delete" : 'Sales leads & campaigns, delete'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">Demo: 5 users. Live version uses email OTP login per user. New leads are split round-robin between sales; Closed Won cases round-robin between operations.</p>`;
   if (setTab === 'integrations') b = `<div class="int-grid">
     ${int('Meta Lead Ads', 'Facebook & Instagram instant forms arrive in seconds via webhook with campaign, ad set, ad name, form name and all form answers.', 'POST /webhooks/meta-leads', 'Connected (demo)')}
     ${int('Google Ads', 'Google lead-form extensions + website forms with gclid. Campaign, ad group, keyword (utm_term) captured.', 'POST /webhooks/google-leads', 'Connected (demo)')}
