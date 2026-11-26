@@ -1,11 +1,37 @@
-/* QPH CRM demo — app */
-const KEY = 'qph_crm_demo_v3';
+/* QPH CRM demo - app */
+const KEY = 'qph_crm_demo_v4';
+/* clean line icons (feather style) */
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  campaigns: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  newleads: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
+  leads: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  contacted: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  appointments: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  followups: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  whatsapp: '<path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/>',
+  calculator: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/>',
+  customers: '<rect x="4" y="2" width="16" height="20" rx="1.5"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  operations: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/>',
+  accounts: '<path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="M22 4 12 14l-3-3"/>',
+  renewals: '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/>',
+  settings: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
+};
+const ICON = (k, s = 18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ''}</svg>`;
+/* positive-first ordering for lead lists */
+const STAGE_RANK = { 'Qualified': 0, 'Proposal Sent': 1, 'Payment Link Sent': 2, 'Payment Received': 3, 'Closed Won': 4, 'Appointment Booked': 5, 'Contacted': 6, 'Follow-up': 7, 'New': 8, 'Not Contacted': 9, 'Lost': 10, 'Junk': 11 };
+let leadSort = 'smart';
+function sortLeads(arr) {
+  const by = { smart: (a, b) => (!!a.dupOf - !!b.dupOf) || (STAGE_RANK[a.stage] - STAGE_RANK[b.stage]) || (b.createdAt - a.createdAt), newest: (a, b) => b.createdAt - a.createdAt, oldest: (a, b) => a.createdAt - b.createdAt, name: (a, b) => a.name.localeCompare(b.name) }[leadSort];
+  return arr.sort(by);
+}
 let S = load();
 let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 12;
+const APP_V = 13;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
@@ -19,13 +45,13 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const aed = n => 'AED ' + Math.round(n || 0).toLocaleString('en-US');
 const H = 3600e3, D = 24 * H;
-const user = id => TEAM.find(t => t.id === id) || { name: id === 'system' ? 'System' : id === 'auto' ? 'Auto-reply' : id === 'ai' ? 'AI Agent' : '—', color: '#8A99A8' };
+const user = id => TEAM.find(t => t.id === id) || { name: id === 'system' ? 'System' : id === 'auto' ? 'Auto-reply' : id === 'ai' ? 'AI Agent' : '-', color: '#8A99A8' };
 const initials = n => n.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
 const av = (id, size = 28) => { const u = user(id); return `<span class="av" style="background:${u.color};width:${size}px;height:${size}px;font-size:${size / 2.4}px" title="${esc(u.name)}">${initials(u.name)}</span>`; };
 const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const pill = (t, cls) => `<span class="pill ${cls || 'p-' + slug(t)}">${esc(t)}</span>`;
 const zoneOf = id => S.zones.find(z => z.id === id) || S.zones[0];
-function fmtDate(ts, withTime = true) { if (!ts) return '—'; const d = new Date(ts); return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + (withTime ? ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''); }
+function fmtDate(ts, withTime = true) { if (!ts) return '-'; const d = new Date(ts); return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + (withTime ? ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''); }
 function ago(ts) { const m = Math.round((Date.now() - ts) / 60e3); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.round(m / 60); if (h < 24) return h + 'h ago'; return Math.round(h / 24) + 'd ago'; }
 function fu(ts) { if (!ts) return ''; const diff = ts - Date.now(); const today = new Date().toDateString() === new Date(ts).toDateString(); if (diff < 0) return `<span class="pill p-lost">Overdue · ${fmtDate(ts)}</span>`; if (today) return `<span class="pill p-follow-up">Today ${new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>`; return `<span class="pill">${fmtDate(ts)}</span>`; }
 function toInput(ts) { const d = new Date(ts || Date.now() + D); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
@@ -46,7 +72,7 @@ function waLink(phone, text) { return 'https://wa.me/' + String(phone).replace(/
 /* ---------------- AI (demo mode) ---------------- */
 const POLISHED = {
   'client ne bola 2 visa chahiye, IFZA ya meydan dono ka rate bhejo. kal call karna hai 4 baje': 'Client needs 2 visas. Send rates for both IFZA and Meydan. Call back tomorrow at 4 PM.',
-  'call kiya, busy tha. bola sham ko whatsapp pe baat karenge': 'Called – client was busy. Will continue the conversation on WhatsApp this evening.',
+  'call kiya, busy tha. bola sham ko whatsapp pe baat karenge': 'Called - client was busy. Will continue the conversation on WhatsApp this evening.',
   'budget 15k tak hai, general trading activity, family visa bhi chahiye baad mein': 'Budget up to AED 15k, General Trading activity. Will also need a family visa later.',
   'proposal bhej diya, partner se discuss karke batayega. friday tak follow up': 'Proposal sent. Client will discuss with partner and revert. Follow up by Friday.',
   'office visit kiya aaj, documents ready hai, payment next week karega': 'Client visited the office today. Documents are ready; payment expected next week.',
@@ -73,7 +99,7 @@ function aiNext(l) {
     'Not Contacted': `Retry at a different time of day and send the follow-up WhatsApp template. After 3 failed attempts, move to Lost with reason "Not reachable".`,
     'Follow-up': `Follow up as promised. Lead with value: share the 3 cheapest zones for "${l.req.activity}" from the calculator comparison.`,
     'Appointment Booked': `Send a reminder 2 hours before the meeting with the office location pin. Prepare a proposal for ${z.name} in advance.`,
-    'Qualified': `Create a proposal for ${z.name} with ${l.req.visas} visa(s) — estimated ${aed(est)}. Also offer SHAMS / SPC as a budget option.`,
+    'Qualified': `Create a proposal for ${z.name} with ${l.req.visas} visa(s) - estimated ${aed(est)}. Also offer SHAMS / SPC as a budget option.`,
     'Proposal Sent': `Follow up within 24h. Handle price objection with a payment split (licence now, visas next month). Quote valid 7 days creates urgency.`,
     'Payment Link Sent': `Check if payment link opened. Call to help complete payment; offer bank transfer as alternative.`,
     'Payment Received': `Move to Closed Won so Operations can open the case, and send the documents checklist template.`,
@@ -88,7 +114,7 @@ function aiReply(l) {
   const est = estimate({ zone: z.id, visas: l.req.visas, acts: 3, addons: ['medical'], disc: 0 });
   if (/price|cost|rate|kitna|charges|fee/.test(t)) return `Hi ${first}, for a ${z.name} licence with ${l.req.visas} visa(s) the all-inclusive estimate is ${aed(est.total)} (licence, establishment card, visas, medical & Emirates ID). Shall I send the detailed proposal?`;
   if (/document|docs|papers/.test(t)) return WA_TEMPLATES[4].text.replace('{name}', first);
-  if (/time|days|how long|kitne din/.test(t)) return `Hi ${first}, the licence is usually issued in 3–5 working days after documents, and visas take around 2–3 weeks in total.`;
+  if (/time|days|how long|kitne din/.test(t)) return `Hi ${first}, the licence is usually issued in 3-5 working days after documents, and visas take around 2-3 weeks in total.`;
   return `Hi ${first}, thanks for your message! I'd be happy to help with your ${l.req.type.toLowerCase()} setup. Are you available for a quick call today?`;
 }
 
@@ -121,7 +147,7 @@ function ingest(d) {
   l.activity.push({ at: Date.now(), by: 'system', text: `Lead created from ${d.source}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : ''}${l.attr.adset ? ' › ' + l.attr.adset : ''}${l.attr.ad ? ' › ' + l.attr.ad : ''}` });
   if (dup) {
     l.dupOf = dup.id; l.tags.push('Duplicate');
-    l.activity.push({ at: Date.now(), by: 'system', text: `⚠ Duplicate of ${dup.id} (${dup.name}) — matched on ${normPhone(dup.phone) === normPhone(d.phone) ? 'phone' : 'email'}. Assigned to same owner: ${user(owner).name}` });
+    l.activity.push({ at: Date.now(), by: 'system', text: `Duplicate of ${dup.id} (${dup.name}) - matched on ${normPhone(dup.phone) === normPhone(d.phone) ? 'phone' : 'email'}. Assigned to same owner: ${user(owner).name}` });
     dup.tags.includes('Re-enquired') || dup.tags.push('Re-enquired');
     log(dup, `Re-enquired via ${d.source}${l.attr.campaign ? ' · ' + l.attr.campaign : ''} → duplicate ${l.id}`, 'system');
   } else {
@@ -131,8 +157,8 @@ function ingest(d) {
   if (S.email && S.email.autoWelcome && l.email) { const t = S.emailTpl[0]; l.emails = [{ at: Date.now(), to: l.email, subject: fillTpl(t.subject, l), by: 'auto', att: '' }]; l.contact.email = false; l.activity.push({ at: Date.now(), by: 'auto', text: `Auto welcome email sent to ${l.email}` }); }
   S.leads.unshift(l);
   const camp = l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : '';
-  notify(owner, `${dup ? '⚠ Duplicate' : '🆕 New'} ${d.source} lead assigned to you: ${l.name}${camp}${S.email && S.email.staffAlerts ? ' (email alert sent)' : ''}`, l.id);
-  if (owner !== 'u1') notify('u1', `${dup ? '⚠ Duplicate' : '🆕 New'} ${d.source} lead ${l.name} → ${user(owner).name}${dup ? '' : ' (round robin)'}`, l.id);
+  notify(owner, `${dup ? 'Duplicate' : 'New'} ${d.source} lead assigned to you: ${l.name}${camp}${S.email && S.email.staffAlerts ? ' (email alert sent)' : ''}`, l.id);
+  if (owner !== 'u1') notify('u1', `${dup ? 'Duplicate' : 'New'} ${d.source} lead ${l.name} → ${user(owner).name}${dup ? '' : ' (round robin)'}`, l.id);
   save();
   return { l, dup };
 }
@@ -172,9 +198,9 @@ function navItems() {
   const contactedN = L.filter(l => ['Contacted', 'Follow-up', 'Not Contacted'].includes(l.stage)).length;
   const custN = S.cases.filter(c => !(acctComplete(c) && c.stage === 'Setup Completed')).length, acctN = S.cases.filter(c => acctComplete(c) && c.stage === 'Setup Completed').length;
   const items = {
-    admin: [['h', 'Overview'], ['dashboard', '📊', 'Dashboard'], ['campaigns', '🎯', 'Campaigns & UTM'], ['h', 'Leads'], ['newleads', '🆕', 'New Leads', newN, 'hot'], ['leads', '👥', 'All Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '🧮', 'Cost Calculator'], ['h', 'Operations'], ['customers', '🏢', 'Customers', custN, ''], ['operations', '🗂️', 'Operations Board'], ['accounts', '✅', 'Accounts', acctN, ''], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '⚙️', 'Settings']],
-    sales: [['h', 'My leads'], ['dashboard', '📊', 'My Dashboard'], ['newleads', '🆕', 'New Leads', newN, 'hot'], ['leads', '👥', 'All My Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '⏰', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
-    ops: [['h', 'Operations'], ['dashboard', '📊', 'Ops Dashboard'], ['customers', '🏢', 'Customers', custN, ''], ['operations', '🗂️', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['accounts', '✅', 'Accounts', acctN, ''], ['renewals', '🔁', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '🧮', 'Cost Calculator']],
+    admin: [['h', 'Overview'], ['dashboard', '', 'Dashboard'], ['campaigns', '', 'Campaigns & UTM'], ['h', 'Leads'], ['newleads', '', 'New Leads', newN, 'hot'], ['leads', '', 'All Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '', 'Cost Calculator'], ['h', 'Operations'], ['customers', '', 'Customers', custN, ''], ['operations', '', 'Operations Board'], ['accounts', '✓', 'Accounts', acctN, ''], ['renewals', '', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '', 'Settings']],
+    sales: [['h', 'My leads'], ['dashboard', '', 'My Dashboard'], ['newleads', '', 'New Leads', newN, 'hot'], ['leads', '', 'All My Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '', 'Cost Calculator']],
+    ops: [['h', 'Operations'], ['dashboard', '', 'Ops Dashboard'], ['customers', '', 'Customers', custN, ''], ['operations', '', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['accounts', '✓', 'Accounts', acctN, ''], ['renewals', '', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '', 'Cost Calculator']],
   }[ME.role];
   return items.map(i => i[0] === 'h' ? { h: i[1] } : { id: i[0], ic: i[1], label: i[2], badge: i[3], cls: i[4] });
 }
@@ -182,7 +208,7 @@ function go(r) { drawer = null; route = r; location.hash = r; $('side').classLis
 
 function render() {
   const items = navItems();
-  $('nav').innerHTML = items.map(n => n.h ? `<div class="nav-h">${n.h}</div>` : `<a class="nav-i ${route === n.id ? 'on' : ''}" onclick="go('${n.id}')"><span class="ic">${n.ic}</span>${n.label}${n.badge ? `<span class="badge ${n.cls || ''}">${n.badge}</span>` : ''}</a>`).join('');
+  $('nav').innerHTML = items.map(n => n.h ? `<div class="nav-h">${n.h}</div>` : `<a class="nav-i ${route === n.id ? 'on' : ''}" onclick="go('${n.id}')"><span class="ic">${ICON(n.id)}</span>${n.label}${n.badge ? `<span class="badge ${n.cls || ''}">${n.badge}</span>` : ''}</a>`).join('');
   const cur = items.find(n => n.id === route); $('pageTitle').textContent = cur ? cur.label : '';
   $('bellCount').textContent = (myNotifs().filter(n => !n.read).length + alerts().length) || '';
   const V = { dashboard: ME.role === 'admin' ? vAdminDash : ME.role === 'sales' ? vSalesDash : vOpsDash, leads: vLeads, newleads: vLeads, contacted: vLeads, appointments: vAppointments, accounts: vAccounts, followups: vFollowups, whatsapp: vWhatsApp, calculator: vCalc, campaigns: vCampaigns, operations: vOps, customers: vCustomers, renewals: vRenewals, settings: vSettings }[route] || vAdminDash;
@@ -229,7 +255,7 @@ function vAdminDash() {
   const notC = S.leads.filter(l => l.stage === 'Not Contacted' || (l.stage === 'New' && Date.now() - l.createdAt > 2 * H)).length;
   const camps = countBy(L.filter(l => l.attr.campaign && l.attr.campaign !== '(none)'), l => l.attr.campaign).slice(0, 6);
   const sales = TEAM.filter(t => t.role === 'sales'), ops = TEAM.filter(t => t.role === 'ops');
-  return `<div class="hello"><div><h2>Welcome back, ${esc(ME.name.split(' ')[0])} 👋</h2><div class="muted">Whole-company view · sales + operations</div></div>${periodSeg()}</div>
+  return `<div class="hello"><div><h2>Welcome back, ${esc(ME.name.split(' ')[0])}</h2><div class="muted">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · Company overview</div></div>${periodSeg()}</div>
   <div class="stats">
     ${stat('Total leads', L.length, `${paidLeads} from paid ads`, "filterGo({})", 'hero')}
     ${stat('Closed won', won.length, L.length ? Math.round(won.length / L.length * 100) + '% conversion' : '', "filterGo({stage:'Closed Won'})")}
@@ -253,7 +279,7 @@ function vAdminDash() {
     </tbody></table></div></div>
   </div>
   <div class="grid2">
-    <div class="card"><div class="card-h"><h2>Latest leads</h2><a class="btn btn-sm" onclick="filterGo({})">View all</a></div><div class="card-b"><ul class="list-plain">${[...S.leads].sort((a, b) => b.createdAt - a.createdAt).slice(0, 7).map(l => leadLi(l, `<span class="small muted">${ago(l.createdAt)}</span><br>${pill(l.stage)}`)).join('')}</ul></div></div>
+    <div class="card"><div class="card-h"><h2>Latest leads</h2><a class="btn btn-sm" onclick="filterGo({})">View all</a></div><div class="card-b"><ul class="list-plain">${S.leads.filter(l => !l.dupOf && !['Junk', 'Lost'].includes(l.stage)).sort((a, b) => b.createdAt - a.createdAt).slice(0, 7).map(l => leadLi(l, `<span class="small muted">${ago(l.createdAt)}</span><br>${pill(l.stage)}`)).join('')}</ul></div></div>
     <div class="card"><div class="card-h"><h2>Operations snapshot</h2><a class="btn btn-sm" onclick="go('operations')">Board →</a></div><div class="card-b">${bars(OPS_STAGES.map(s => [s, S.cases.filter(c => c.stage === s).length]), 'navy')}</div></div>
   </div>`;
 }
@@ -264,14 +290,14 @@ function vSalesDash() {
   const open = L.filter(l => OPEN_STAGES.includes(l.stage));
   const overdue = open.filter(l => l.followUp && l.followUp < now).sort((a, b) => a.followUp - b.followUp);
   const today = open.filter(l => l.followUp && l.followUp >= now && l.followUp <= eod).sort((a, b) => a.followUp - b.followUp);
-  const fresh = L.filter(l => l.stage === 'New').sort((a, b) => b.createdAt - a.createdAt);
+  const fresh = L.filter(l => l.stage === 'New').sort((a, b) => (!!a.dupOf - !!b.dupOf) || (b.createdAt - a.createdAt));
   const hot = open.filter(l => l.temp === 'Hot').length;
   const pipe = L.filter(l => ['Qualified', 'Proposal Sent', 'Payment Link Sent'].includes(l.stage)).reduce((s, l) => s + l.value, 0);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
   const wonM = L.filter(l => l.stage === 'Closed Won' && l.payment && l.payment.date >= monthStart);
   const target = 60000; const got = wonM.reduce((s, l) => s + l.payment.amount, 0);
   const hr = new Date().getHours();
-  return `<div class="hello"><div><h2>Good ${hr < 12 ? 'morning' : hr < 17 ? 'afternoon' : 'evening'}, ${esc(ME.name.split(' ')[0])} ☀️</h2><div class="muted">Your leads only · clear Overdue first, then Today, then New</div></div></div>
+  return `<div class="hello"><div><h2>Good ${hr < 12 ? 'morning' : hr < 17 ? 'afternoon' : 'evening'}, ${esc(ME.name.split(' ')[0])}</h2><div class="muted">Your leads only · clear Overdue first, then Today, then New</div></div></div>
   <div class="stats">
     ${stat('New to contact', fresh.length, 'contact same day', "filterGo({stage:'New'})", 'hero')}
     ${stat('Overdue follow-ups', overdue.length, '', "go('followups')", overdue.length ? 'warn' : '')}
@@ -281,10 +307,10 @@ function vSalesDash() {
     ${stat('Won this month', aed(got), `target ${aed(target)} · ${Math.round(got / target * 100)}%`, "filterGo({stage:'Closed Won'})")}
   </div>
   <div class="grid2">
-    <div class="card"><div class="card-h"><h2>⏰ Today's to-do</h2><a class="btn btn-sm" onclick="go('followups')">All follow-ups</a></div><div class="card-b">
-      ${overdue.length + today.length ? `<ul class="list-plain">${[...overdue, ...today].slice(0, 8).map(l => leadLi(l, fu(l.followUp))).join('')}</ul>` : '<div class="empty">🎉 Nothing due. Contact your new leads!</div>'}
+    <div class="card"><div class="card-h"><h2>Today's to-do</h2><a class="btn btn-sm" onclick="go('followups')">All follow-ups</a></div><div class="card-b">
+      ${overdue.length + today.length ? `<ul class="list-plain">${[...overdue, ...today].slice(0, 8).map(l => leadLi(l, fu(l.followUp))).join('')}</ul>` : '<div class="empty">Nothing due. Contact your new leads!</div>'}
     </div></div>
-    <div class="card"><div class="card-h"><h2>🆕 New leads (call within 15 min)</h2></div><div class="card-b">
+    <div class="card"><div class="card-h"><h2>New leads (call within 15 min)</h2></div><div class="card-b">
       ${fresh.length ? `<ul class="list-plain">${fresh.slice(0, 8).map(l => leadLi(l, `<span class="small ${now - l.createdAt > 2 * H ? '' : 'muted'}" style="${now - l.createdAt > 2 * H ? 'color:var(--red);font-weight:700' : ''}">${ago(l.createdAt)}</span>`)).join('')}</ul>` : '<div class="empty">No new leads</div>'}
     </div></div>
   </div>
@@ -303,7 +329,7 @@ function vOpsDash() {
   const renew = S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < Date.now() + 60 * D).sort((a, b) => a.licenceExpiry - b.licenceExpiry);
   const issued = mine.filter(c => OPS_STAGES.indexOf(c.stage) >= 4).length;
   const caseLi = c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const i = OPS_STAGES.indexOf(c.stage); return `<li onclick="openCase('${c.id}')">${av(c.owner, 26)}<div><b>${esc(c.company)}</b><div class="small muted">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)}</div></div><div class="r">${pill(c.stage, i >= 8 ? 'p-closed-won' : i >= 4 ? 'p-qualified' : 'p-contacted')}</div></li>`; };
-  return `<div class="hello"><div><h2>Hello, ${esc(ME.name.split(' ')[0])} 🗂️</h2><div class="muted">Operations view · your cases, documents and renewals</div></div></div>
+  return `<div class="hello"><div><h2>Hello, ${esc(ME.name.split(' ')[0])}</h2><div class="muted">Operations view · your cases, documents and renewals</div></div></div>
   <div class="stats">
     ${stat('My active cases', active.length, mine.length + ' total', "opsMine=true;go('operations')", 'hero')}
     ${stat('Documents pending', docsPending.length, 'cannot pass Documents Collected', "opsMine=true;go('operations')", docsPending.length ? 'warn' : '')}
@@ -317,8 +343,8 @@ function vOpsDash() {
     <div class="card"><div class="card-h"><h2>Cases by stage (mine)</h2></div><div class="card-b">${bars(OPS_STAGES.map(s => [s, mine.filter(c => c.stage === s).length]), 'navy')}</div></div>
   </div>
   <div class="grid2">
-    <div class="card"><div class="card-h"><h2>📄 Missing documents</h2></div><div class="card-b">${docsPending.length ? `<ul class="list-plain">${docsPending.slice(0, 6).map(c => `<li onclick="openCase('${c.id}')"><div><b>${esc(c.company)}</b><div class="small muted">Missing: ${DOCS.filter(d => !c.docs[d]).join(', ')}</div></div></li>`).join('')}</ul>` : '<div class="empty">All documents complete ✅</div>'}</div></div>
-    <div class="card"><div class="card-h"><h2>🔁 Upcoming renewals</h2><a class="btn btn-sm" onclick="go('renewals')">All</a></div><div class="card-b">${renew.length ? `<ul class="list-plain">${renew.slice(0, 6).map(c => `<li onclick="openCase('${c.id}')"><div><b>${esc(c.company)}</b><div class="small muted">${esc(c.licenceNo)}</div></div><div class="r">${expiryPill(c.licenceExpiry)}</div></li>`).join('')}</ul>` : '<div class="empty">No renewals in next 60 days</div>'}</div></div>
+    <div class="card"><div class="card-h"><h2>Missing documents</h2></div><div class="card-b">${docsPending.length ? `<ul class="list-plain">${docsPending.slice(0, 6).map(c => `<li onclick="openCase('${c.id}')"><div><b>${esc(c.company)}</b><div class="small muted">Missing: ${DOCS.filter(d => !c.docs[d]).join(', ')}</div></div></li>`).join('')}</ul>` : '<div class="empty">All documents complete ✓</div>'}</div></div>
+    <div class="card"><div class="card-h"><h2>Upcoming renewals</h2><a class="btn btn-sm" onclick="go('renewals')">All</a></div><div class="card-b">${renew.length ? `<ul class="list-plain">${renew.slice(0, 6).map(c => `<li onclick="openCase('${c.id}')"><div><b>${esc(c.company)}</b><div class="small muted">${esc(c.licenceNo)}</div></div><div class="r">${expiryPill(c.licenceExpiry)}</div></li>`).join('')}</ul>` : '<div class="empty">No renewals in next 60 days</div>'}</div></div>
   </div>`;
 }
 function expiryPill(ts) { const d = Math.round((ts - Date.now()) / D); return d < 0 ? pill('Expired ' + -d + 'd ago', 'p-lost') : d <= 7 ? pill(d + ' days', 'p-lost') : d <= 30 ? pill(d + ' days', 'p-follow-up') : pill(d + ' days', 'p-new'); }
@@ -326,9 +352,10 @@ function expiryPill(ts) { const d = Math.round((ts - Date.now()) / D); return d 
 /* ---------------- leads ---------------- */
 function filteredLeads() {
   const q = $('q').value.trim().toLowerCase(); const f = leadFilter; const RS = { newleads: ['New'], contacted: ['Contacted', 'Follow-up', 'Not Contacted'] }[route];
-  return visibleLeads().filter(l => (!RS || RS.includes(l.stage)) && passLF(l, f)
+  const out = visibleLeads().filter(l => (!RS || RS.includes(l.stage)) && passLF(l, f)
     && (!q || [l.name, l.phone, l.email, l.id, l.attr.campaign, l.attr.adset, l.attr.ad, ...(l.tags || [])].join(' ').toLowerCase().includes(q) || normPhone(q).length > 5 && normPhone(l.phone).includes(normPhone(q))))
-    .sort((a, b) => b.createdAt - a.createdAt);
+    ;
+  return sortLeads(out);
 }
 function setF(k, v) { leadFilter[k] = v; render(); }
 function vLeads() {
@@ -339,11 +366,12 @@ function vLeads() {
     ${leadFilterBar({ stages: route === 'contacted' ? ['Contacted', 'Follow-up', 'Not Contacted'] : STAGES, noStage: route === 'newleads' })}
     <label class="btn btn-sm" style="cursor:pointer"><input type="checkbox" ${leadFilter.dup ? 'checked' : ''} onchange="setF('dup',this.checked)"> Duplicates only</label>
     <span class="count">${L.length} of ${all.length} leads</span>
-    <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>${vmToggle('leads')}
+    <select class="sortsel" onchange="leadSort=this.value;render()">${[['smart', 'Sort: Recommended'], ['newest', 'Sort: Newest'], ['oldest', 'Sort: Oldest'], ['name', 'Sort: Name A-Z']].map(([k, t]) => `<option value="${k}" ${leadSort === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button>${vmToggle('leads')}
   </div>
-  ${vmOf('leads') === 'grid' ? `<div class="cards">${L.map(l => leadCard(l, OPEN_STAGES.includes(l.stage) && l.followUp ? '⏰ ' + fmtDate(l.followUp) : '')).join('') || '<div class="empty">No leads match</div>'}</div>` : `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Lead</th><th>Source · Campaign › Ad set › Ad</th><th>Stage</th><th>Temp</th>${ME.role === 'admin' ? '<th>Owner</th>' : ''}<th>Follow-up</th><th>Created</th></tr></thead><tbody>
+  ${vmOf('leads') === 'grid' ? `<div class="cards">${L.map(l => leadCard(l, OPEN_STAGES.includes(l.stage) && l.followUp ? '' + fmtDate(l.followUp) : '')).join('') || '<div class="empty">No leads match</div>'}</div>` : `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Lead</th><th>Source · Campaign › Ad set › Ad</th><th>Stage</th><th>Temp</th>${ME.role === 'admin' ? '<th>Owner</th>' : ''}<th>Follow-up</th><th>Created</th></tr></thead><tbody>
   ${L.map(l => `<tr class="click ${l.dupOf ? 'dup' : ''}" onclick="openLead('${l.id}')">
-    <td><b>${esc(l.name)}</b><span class="sub">${esc(l.phone)} · ${l.id}</span>${l.dupOf ? ' ' + pill('Duplicate of ' + l.dupOf, 'p-dup') : ''}${dupsOf(l.id).length ? ' ' + pill('Re-enquired ×' + dupsOf(l.id).length, 'p-follow-up') : ''}</td>
+    <td><b>${esc(l.name)}</b><span class="sub">${esc(l.phone)} · ${l.id}</span>${l.dupOf ? ' <span class="tag">Duplicate</span>' : ''}${dupsOf(l.id).length ? ' ' + pill('Re-enquired ×' + dupsOf(l.id).length, 'p-follow-up') : ''}</td>
     <td>${pill(l.source)} <span class="small">${esc(l.attr.platform || '')}</span><span class="sub">${esc(l.attr.campaign && l.attr.campaign !== '(none)' ? l.attr.campaign : '')}</span>${l.attr.adset ? `<span class="sub">› ${esc(l.attr.adset)} › ${esc(l.attr.ad)}</span>` : ''}</td>
     <td>${pill(l.stage)}</td><td>${pill(l.temp)}</td>${ME.role === 'admin' ? `<td>${av(l.owner, 24)}</td>` : ''}<td>${OPEN_STAGES.includes(l.stage) ? fu(l.followUp) : ''}</td><td class="small muted">${ago(l.createdAt)}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">No leads match</div></td></tr>`}
   </tbody></table></div>`}`;
@@ -360,14 +388,14 @@ function exportCSV() {
 /* ---------------- duplicates ---------------- */
 function vDuplicates() {
   const dups = visibleLeads().filter(l => l.dupOf);
-  const rule = `<div class="card" style="margin-bottom:16px"><div class="card-b" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="font-size:28px">🧬</div><div style="flex:1;min-width:240px"><b>How duplicate check works</b><div class="small muted">Every incoming lead (Meta, Google, Website, WhatsApp, manual, CSV) is matched on <b>phone (last 9 digits — so +971, 00971 and 05… all match)</b> and <b>email (case-insensitive)</b>. A match is tagged <span class="pill p-dup">Duplicate</span>, linked to the original, assigned to the <b>same salesperson</b>, and the original gets a "Re-enquired" note with the new campaign. Ad spend is not double-counted.</div></div></div></div>`;
+  const rule = `<div class="card" style="margin-bottom:16px"><div class="card-b" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="font-size:28px"></div><div style="flex:1;min-width:240px"><b>How duplicate check works</b><div class="small muted">Every incoming lead (Meta, Google, Website, WhatsApp, manual, CSV) is matched on <b>phone (last 9 digits - so +971, 00971 and 05… all match)</b> and <b>email (case-insensitive)</b>. A match is tagged <span class="pill p-dup">Duplicate</span>, linked to the original, assigned to the <b>same salesperson</b>, and the original gets a "Re-enquired" note with the new campaign. Ad spend is not double-counted.</div></div></div></div>`;
   return rule + (dups.length ? `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>New enquiry (duplicate)</th><th>Original lead</th><th>Matched on</th><th>Owner</th><th></th></tr></thead><tbody>
   ${dups.map(d => { const o = S.leads.find(x => x.id === d.dupOf) || {}; const on = normPhone(o.phone) === normPhone(d.phone) ? 'Phone' : 'Email'; return `<tr>
     <td><b class="click" style="cursor:pointer" onclick="openLead('${d.id}')">${esc(d.name)} · ${d.id}</b><span class="sub">${esc(d.phone)} · ${ago(d.createdAt)}</span><span class="sub">${pill(d.source)} ${esc(d.attr.campaign || '')}${d.attr.adset ? ' › ' + esc(d.attr.adset) : ''}</span></td>
     <td><b style="cursor:pointer" onclick="openLead('${o.id}')">${esc(o.name || '')} · ${o.id || ''}</b><span class="sub">${esc(o.phone || '')} · ${pill(o.stage || '')}</span><span class="sub">${pill(o.source || '')} ${esc((o.attr || {}).campaign || '')}</span></td>
     <td>${pill(on, 'p-dup')}</td><td>${av(d.owner, 24)}</td>
     <td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick="mergeDup('${d.id}')">Merge into original</button> <button class="btn btn-sm" onclick="notDup('${d.id}')">Not a duplicate</button></td></tr>`; }).join('')}
-  </tbody></table></div>` : '<div class="card"><div class="empty">No duplicates right now 🎉 — try ⚡ Simulate lead → "Make it a duplicate"</div></div>');
+  </tbody></table></div>` : '<div class="card"><div class="empty">No duplicates right now - try Simulate lead → "Make it a duplicate"</div></div>');
 }
 function mergeDup(id) {
   const d = S.leads.find(l => l.id === id); const o = S.leads.find(l => l.id === d.dupOf); if (!o) return;
@@ -377,7 +405,7 @@ function mergeDup(id) {
   if (S.chats[d.id]) { S.chats[o.id] = (S.chats[o.id] || []).concat(S.chats[d.id]).sort((a, b) => a.at - b.at); delete S.chats[d.id]; }
   S.leads = S.leads.filter(l => l.id !== id); save();
   if (drawer && drawer.id === id) drawer.id = o.id;
-  render(); toast('✅ Merged into ' + o.id + ' — campaign touch kept in history');
+  render(); toast('✓ Merged into ' + o.id + ' - campaign touch kept in history');
 }
 function notDup(id) { const d = S.leads.find(l => l.id === id); log(d, `Marked NOT a duplicate of ${d.dupOf}`); d.dupOf = null; d.tags = d.tags.filter(t => t !== 'Duplicate'); save(); render(); toast('Duplicate tag removed'); }
 
@@ -421,7 +449,7 @@ function tryStage(id, s) {
   const back = PIPE.indexOf(s) >= 0 && PIPE.indexOf(l.stage) > PIPE.indexOf(s);
   if (s === 'Lost' || s === 'Junk') return reasonModal(id, s);
   const m = back ? [] : missing(l, s);
-  if (m.length) return modal(`<h2>Fill the mandatory fields for "${s}"</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✅' : '⭕'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
+  if (m.length) return modal(`<h2>Fill the mandatory fields for "${s}"</h2><div class="muted small">${esc(l.name)} · currently ${esc(l.stage)}</div><p>Fill these first:</p><ul class="crit">${CRIT[s](l).map(c => `<li class="${c[0] ? 'ok' : ''}">${c[0] ? '✓' : '○'} ${esc(c[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK, I'll fill them</button></div>`);
   moveStage(l, s, back ? 'back' : ''); save(); render(); toast('Stage → ' + s);
 }
 function moveStage(l, s, how) {
@@ -429,7 +457,7 @@ function moveStage(l, s, how) {
   if (s === 'Closed Won') openCaseFor(l);
   if (s === 'Payment Received' || s === 'Closed Won' || s === 'Proposal Sent') l.followUp = s === 'Proposal Sent' ? (l.followUp || Date.now() + D) : null;
   if (!back && l.email && S.email && ((s === 'Proposal Sent' && S.email.autoProposal) || (s === 'Payment Link Sent' && S.email.autoPayment))) { const t = S.emailTpl.find(x => x.id === (s === 'Proposal Sent' ? 'proposal' : 'payment')); const att = s === 'Proposal Sent' ? (l.proposals[l.proposals.length - 1] || {}).pdf || '' : ''; l.emails.push({ at: Date.now(), to: l.email, subject: fillTpl(t.subject, l), by: 'auto', att }); log(l, `Auto email: "${fillTpl(t.subject, l)}"${att ? ' + ' + att : ''}`, 'auto'); }
-  log(l, `Stage changed ${l.stage} → ${s}${back ? ' (moved back)' : how === 'auto' ? ' (auto — details complete)' : ''}`, how === 'auto' ? 'system' : undefined); l.stage = s;
+  log(l, `Stage changed ${l.stage} → ${s}${back ? ' (moved back)' : how === 'auto' ? ' (auto - details complete)' : ''}`, how === 'auto' ? 'system' : undefined); l.stage = s;
 }
 /* Auto-advance: as soon as the details for a later stage are filled, the lead moves there by itself (never backwards, never to Closed Won / Lost / Junk). */
 const AUTO_TOP = PIPE.indexOf('Payment Received');
@@ -440,7 +468,7 @@ function autoAdvance(l) {
   if (l.stage === 'New' && !missing(l, 'Not Contacted').length) { moveStage(l, 'Not Contacted', 'auto'); return ['New', 'Not Contacted']; }
   return null;
 }
-function autoToast(r) { if (r) setTimeout(() => toast(`✅ Auto-moved ${r[0]} → <b>${r[1]}</b>`), 50); }
+function autoToast(r) { if (r) setTimeout(() => toast(`✓ Auto-moved ${r[0]} → <b>${r[1]}</b>`), 50); }
 function reasonModal(id, s) {
   const l = S.leads.find(x => x.id === id);
   modal(`<h2>Mark ${s}</h2><div class="muted small">${esc(l.name)}</div><div class="form"><div class="full"><label>Reason (required)</label><select id="rsn"><option value="">Select…</option>${LOST_REASONS.map(r => `<option>${r}</option>`).join('')}</select></div></div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="if(!$('rsn').value)return toast('Pick a reason');const l=S.leads.find(x=>x.id==='${id}');l.reason=$('rsn').value;l.followUp=null;log(l,'Stage changed '+l.stage+' → ${s} · '+l.reason);l.stage='${s}';save();closeModal();render();toast('Marked ${s}')">Mark ${s}</button></div>`);
@@ -451,13 +479,13 @@ function openLead(id) { drawer = { kind: 'lead', id }; $('drawerBg').classList.r
 function openCase(id) { drawer = { kind: 'case', id }; $('drawerBg').classList.add('open'); renderDrawer(); }
 function closeDrawer() { const wasLead = drawer && drawer.kind === 'lead'; drawer = null; $('drawerBg').classList.remove('open'); if (wasLead && ME) render(); }
 function renderDrawer() { if (drawer && drawer.kind === 'case') $('drawer').innerHTML = caseDrawer(); }
-function leadNavList() { return route === 'leads' ? filteredLeads() : visibleLeads().slice().sort((a, b) => b.createdAt - a.createdAt); }
+function leadNavList() { return ['leads', 'newleads', 'contacted'].includes(route) ? filteredLeads() : sortLeads(visibleLeads().slice()); }
 function navLead(dir) { const L = leadNavList(); const i = L.findIndex(l => l.id === drawer.id); const n = L[i + dir]; if (n) { drawer.id = n.id; render(); window.scrollTo(0, 0); } }
 function setL(id, path, val) {
   const l = S.leads.find(x => x.id === id); const keys = path.split('.'); let o = l; keys.slice(0, -1).forEach(k => { o[k] = o[k] || {}; o = o[k]; });
   const k = keys[keys.length - 1]; const old = o[k]; o[k] = val;
   if (path === 'req.type') { const z = S.zones.find(z => z.type === val); l.req.zone = val === 'Free Zone' ? '' : (z ? z.id : ''); }
-  if (path === 'phone' || path === 'email') { const d = findDup(l.phone, l.email, l.id); if (d && !l.dupOf && d.id !== l.id) { l.dupOf = d.id; l.tags.push('Duplicate'); toast('⚠ Already exists on ' + d.id + ' — tagged Duplicate'); } }
+  if (path === 'phone' || path === 'email') { const d = findDup(l.phone, l.email, l.id); if (d && !l.dupOf && d.id !== l.id) { l.dupOf = d.id; l.tags.push('Duplicate'); toast('Already exists on ' + d.id + ' - tagged Duplicate'); } }
   if (path.startsWith('req.') && has(l.req.zone)) l.value = estimate({ zone: l.req.zone, visas: l.req.visas, acts: 3, addons: ['medical'] }).total;
   const changed = String(old ?? '') !== String(val ?? '');
   if (changed) log(l, `${path.replace('req.', '').replace('appt.', 'appointment ').replace('contact.', '')} → ${typeof val === 'boolean' ? (val ? 'yes' : 'no') : (/At$|^followUp$|appt\.at/.test(path) && val ? fmtDate(val) : val)}`);
@@ -483,39 +511,39 @@ function leadPage() {
   <div class="lp-h">
     <div class="lp-av" style="background:${user(l.owner).color}">${initials(l.name)}</div>
     <div style="flex:1;min-width:0"><h2>${esc(l.name)}</h2>
-      <div class="lp-meta">📱 ${esc(l.phone)} · ✉ ${esc(l.email || '—')}</div>
-      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${pill('● ' + l.stage, 'p-' + slug(l.stage))} ${l.temp === 'Hot' ? pill('🔥 Hot', 'p-hot') : pill(l.temp)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')}<button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div></div>
+      <div class="lp-meta">📱 ${esc(l.phone)} · ✉ ${esc(l.email || '-')}</div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${pill(l.stage)} ${l.temp === 'Hot' ? pill('Hot', 'p-hot') : pill(l.temp)} ${l.tags.map(t => t === 'Duplicate' ? pill(t, 'p-dup') : `<span class="tag">${esc(t)}</span>`).join('')}<button class="btn btn-sm" style="padding:1px 8px" onclick="tagModal('${l.id}')">+ tag</button></div></div>
     <div class="lp-nav"><button class="btn btn-sm" onclick="navLead(-1)" ${pos <= 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${pos + 1} / ${L.length}</span><button class="btn btn-sm" onclick="navLead(1)" ${pos >= L.length - 1 ? 'disabled' : ''}>Next ›</button><button class="icon-btn" onclick="closeDrawer()">✕</button></div>
   </div>
   <div class="dr-actions">
     <a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="setL('${l.id}','contact.call',true)">📞 Call</a>
     <button class="btn btn-sm btn-wa" onclick="openChat('${l.id}')"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg> WhatsApp</button>
     <button class="btn btn-sm" onclick="composeEmail('${l.id}')">✉ Email</button>
-    <button class="btn btn-sm" onclick="proposalFor('${l.id}')">▤ Create proposal</button>
-    <button class="btn btn-sm" onclick="document.getElementById('sec-fu').scrollIntoView({behavior:'smooth'})">⏰ Reminder</button>
-    <button class="btn btn-ai btn-sm" onclick="runAI('${l.id}')">✨ AI next step</button>
+    <button class="btn btn-sm" onclick="proposalFor('${l.id}')">Create proposal</button>
+    <button class="btn btn-sm" onclick="document.getElementById('sec-fu').scrollIntoView({behavior:'smooth'})">Reminder</button>
+    <button class="btn btn-ai btn-sm" onclick="runAI('${l.id}')">AI next step</button>
     <span style="flex:1"></span>
-    ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">🗑 Delete</button>` : ''}
+    ${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="assign('${l.id}',this.value)">${TEAM.filter(t => t.role === 'sales').map(t => `<option value="${t.id}" ${l.owner === t.id ? 'selected' : ''}>Owner: ${t.name}</option>`).join('')}</select><button class="btn btn-sm btn-danger" onclick="delLead('${l.id}')">Delete</button>` : ''}
   </div>
   <div class="pipe">${PIPE.map((s, i) => { const side = s === 'Follow-up' || s === 'Appointment Booked'; const done = !isClosed && ci > i && (!side || !missing(l, s).length); const skipped = !isClosed && ci > i && !done; const cur = l.stage === s; const lock = !done && !cur && !skipped && missing(l, s).length > 0; return `<button class="${done ? 'done' : ''} ${cur ? 'cur' : ''}" onclick="tryStage('${l.id}','${s}')" title="${s}">${done ? '✓ ' : ''}${s}</button>`; }).join('')}</div>
-  ${pend.length ? `<div class="pending"><div><b>⚠ ${pend.length} mandatory field${pend.length > 1 ? 's' : ''} pending for ${esc(goal)}</b><div class="small muted">Fill these and the lead moves to ${esc(goal)} automatically${goal === 'Closed Won' ? ' (Closed Won is confirmed by click)' : ''}.</div></div><div class="pend-chips">${pend.map(c => `<button onclick="goField('${c[2]}')">${esc(c[1])} →</button>`).join('')}</div></div>` : goal && !isClosed ? `<div class="pending ok"><b>✅ All details for ${esc(goal)} are filled</b>${goal === 'Closed Won' ? `<button class="btn btn-sm btn-primary" onclick="tryStage('${l.id}','Closed Won')">Mark Closed Won</button>` : ''}</div>` : ''}
+  ${pend.length ? `<div class="pending"><div><b>${pend.length} mandatory field${pend.length > 1 ? 's' : ''} pending for ${esc(goal)}</b><div class="small muted">Fill these and the lead moves to ${esc(goal)} automatically${goal === 'Closed Won' ? ' (Closed Won is confirmed by click)' : ''}.</div></div><div class="pend-chips">${pend.map(c => `<button onclick="goField('${c[2]}')">${esc(c[1])} →</button>`).join('')}</div></div>` : goal && !isClosed ? `<div class="pending ok"><b>✓ All details for ${esc(goal)} are filled</b>${goal === 'Closed Won' ? `<button class="btn btn-sm btn-primary" onclick="tryStage('${l.id}','Closed Won')">Mark Closed Won</button>` : ''}</div>` : ''}
   ${isClosed ? `<div class="dup-box"><b>${esc(l.stage)}</b><span>Reason: ${esc(l.reason)}</span><button class="btn btn-sm" onclick="tryStage('${l.id}','New')">Re-open as New</button></div>` : ''}
 
   <div class="lp-grid"><div class="lp-main">
-    ${o ? `<div class="dup-box"><div style="font-size:22px">⚠️</div><div style="flex:1;min-width:200px"><b>Duplicate lead</b><div class="small">Same ${normPhone(o.phone) === normPhone(l.phone) ? 'phone' : 'email'} as <a onclick="openLead('${o.id}')" style="cursor:pointer;font-weight:700">${o.id} · ${esc(o.name)}</a> (${esc(o.stage)}, first came from ${esc(o.source)} ${ago(o.createdAt)}).</div></div><button class="btn btn-sm btn-primary" onclick="mergeDup('${l.id}')">Merge into original</button><button class="btn btn-sm" onclick="notDup('${l.id}')">Not a duplicate</button></div>` : ''}
-    ${kids.length ? `<div class="dup-box" style="background:#FFF8EC;border-color:#F3D19C"><div style="font-size:22px">🔁</div><div style="flex:1"><b style="color:var(--amber)">Re-enquired ${kids.length}×</b><div class="small">${kids.map(k => `<a style="cursor:pointer" onclick="openLead('${k.id}')">${k.id}</a> via ${esc(k.source)} ${esc(k.attr.campaign || '')} (${ago(k.createdAt)})`).join('<br>')}</div></div></div>` : ''}
-    ${l.ai ? `<div class="ai-box"><b>✨ AI Agent</b> <span class="small muted">· ${fmtDate(l.ai.at)}</span><div style="margin-top:6px"><b style="color:var(--navy)">Summary:</b> ${esc(l.ai.summary)}</div><div style="margin-top:4px"><b style="color:var(--navy)">Next step:</b> ${esc(l.ai.next)}</div></div>` : ''}
+    ${o ? `<div class="dup-box"><div style="font-size:22px"></div><div style="flex:1;min-width:200px"><b>Duplicate lead</b><div class="small">Same ${normPhone(o.phone) === normPhone(l.phone) ? 'phone' : 'email'} as <a onclick="openLead('${o.id}')" style="cursor:pointer;font-weight:700">${o.id} · ${esc(o.name)}</a> (${esc(o.stage)}, first came from ${esc(o.source)} ${ago(o.createdAt)}).</div></div><button class="btn btn-sm btn-primary" onclick="mergeDup('${l.id}')">Merge into original</button><button class="btn btn-sm" onclick="notDup('${l.id}')">Not a duplicate</button></div>` : ''}
+    ${kids.length ? `<div class="dup-box" style="background:#FFF8EC;border-color:#F3D19C"><div style="font-size:22px"></div><div style="flex:1"><b style="color:var(--amber)">Re-enquired ${kids.length}×</b><div class="small">${kids.map(k => `<a style="cursor:pointer" onclick="openLead('${k.id}')">${k.id}</a> via ${esc(k.source)} ${esc(k.attr.campaign || '')} (${ago(k.createdAt)})`).join('<br>')}</div></div></div>` : ''}
+    ${l.ai ? `<div class="ai-box"><b>AI Agent</b> <span class="small muted">· ${fmtDate(l.ai.at)}</span><div style="margin-top:6px"><b style="color:var(--navy)">Summary:</b> ${esc(l.ai.summary)}</div><div style="margin-top:4px"><b style="color:var(--navy)">Next step:</b> ${esc(l.ai.next)}</div></div>` : ''}
 
     <div class="card"><div class="card-h"><h2>1 · Lead details & qualification</h2><span class="small muted">* required to unlock Qualified</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
       <div>${req('Full name')}${inp(l, 'name')}</div><div>${req('Phone', normPhone(l.phone).length >= 8 || false)}${inp(l, 'phone', 'tel')}</div><div>${req('Email')}${inp(l, 'email', 'email')}</div>
-      <div>${req('Source')}<input value="${esc(l.source + (a.platform ? ' – ' + a.platform : ''))}" disabled></div><div>${req('Service / business type')}${sel(l, 'service', SERVICES)}</div><div>${req('Customer interested?', l.interested === 'Yes' || false)}${sel(l, 'interested', ['Yes', 'Not sure', 'No'])}</div>
+      <div>${req('Source')}<input value="${esc(l.source + (a.platform ? ' - ' + a.platform : ''))}" disabled></div><div>${req('Service / business type')}${sel(l, 'service', SERVICES)}</div><div>${req('Customer interested?', l.interested === 'Yes' || false)}${sel(l, 'interested', ['Yes', 'Not sure', 'No'])}</div>
       <div>${req('Number of visas', !qmiss(l.req.visas) || false)}${inp(l, 'req.visas', 'number', 'min="0" max="10"')}</div>
       <div>${req('Jurisdiction', !qmiss(l.req.type) || false)}${sel(l, 'req.type', ['Free Zone', 'Mainland', 'Offshore'])}</div>
       <div>${req(l.req.type === 'Free Zone' ? 'Free zone' : 'Authority', (has(l.req.zone) && zoneOf(l.req.zone).type === l.req.type) || false)}${sel(l, 'req.zone', zonesOfType.map(z => [z.id, z.name]))}</div>
       <div>${req('Nationality', !qmiss(l.nationality) || false)}${sel(l, 'nationality', NATIONALITIES)}</div>
       <div>${req('Exact business activity', !qmiss(l.req.activity) || false)}<input list="actList" data-path="req.activity" class="${NEED.has('req.activity') ? 'need' : ''}" value="${esc(l.req.activity || '')}" placeholder="e.g. General Trading" onchange="setL('${l.id}','req.activity',this.value)"><datalist id="actList">${ACTIVITIES.map(x => `<option>${x}</option>`).join('')}</datalist>${NEED.has('req.activity') ? `<span class="need-t">Required for ${esc(NEED_FOR)}</span>` : ''}</div>
-      <div>${req('When to start')}${sel(l, 'start', ['Immediately', 'Within 1 month', '1–3 months', 'Just exploring'])}</div>
-      <div>${req('Budget (AED)')}${inp(l, 'budget', 'number')}</div><div>${req('Hot / Warm / Cold')}${sel(l, 'temp', ['Hot', 'Warm', 'Cold'], '—')}</div><div>${req('Estimated deal value')}<input value="${aed(l.value)}" disabled></div>
+      <div>${req('When to start')}${sel(l, 'start', ['Immediately', 'Within 1 month', '1-3 months', 'Just exploring'])}</div>
+      <div>${req('Budget (AED)')}${inp(l, 'budget', 'number')}</div><div>${req('Hot / Warm / Cold')}${sel(l, 'temp', ['Hot', 'Warm', 'Cold'], '-')}</div><div>${req('Estimated deal value')}<input value="${aed(l.value)}" disabled></div>
     </div></div></div>
 
     <div class="card"><div class="card-h"><h2>2 · Contact status</h2><span class="small muted">Unlocks: Contacted</span></div><div class="card-b">
@@ -525,9 +553,9 @@ function leadPage() {
         <button class="${l.stage === 'Not Contacted' ? 'on bad' : ''}" onclick="tryStage('${l.id}','Not Contacted')">✕ Not contacted</button>
       </div>
       <div class="chk-row ${NEED.has('contact') ? 'need-box' : ''}" data-path="contact">${[['wa', 'WhatsApp sent'], ['call', 'Called'], ['email', 'Email sent']].map(([k, t]) => `<label class="chk ${l.contact[k] ? 'on' : ''}"><input type="checkbox" ${l.contact[k] ? 'checked' : ''} onchange="setL('${l.id}','contact.${k}',this.checked)"> ${t}</label>`).join('')}</div>
-      ${NEED.has('contact') ? `<div class="need-t" style="margin-top:6px">Tick WhatsApp sent, Called or Email sent — required for ${esc(NEED_FOR)}</div>` : ''}
-      <div class="form" style="margin-top:10px"><div>${req('If not contacted — reason')}${sel(l, 'ncReason', NOT_CONTACTED_REASONS)}</div><div>${req('Retry at')}${inp(l, 'retryAt', 'datetime-local')}</div></div>
-      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Junk')">🗑 Mark junk</button><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Lost')">Mark lost</button></div>
+      ${NEED.has('contact') ? `<div class="need-t" style="margin-top:6px">Tick WhatsApp sent, Called or Email sent - required for ${esc(NEED_FOR)}</div>` : ''}
+      <div class="form" style="margin-top:10px"><div>${req('If not contacted - reason')}${sel(l, 'ncReason', NOT_CONTACTED_REASONS)}</div><div>${req('Retry at')}${inp(l, 'retryAt', 'datetime-local')}</div></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Junk')">Mark junk</button><button class="btn btn-sm btn-danger" onclick="tryStage('${l.id}','Lost')">Mark lost</button></div>
     </div></div>
 
     <div class="card" id="sec-fu"><div class="card-h"><h2>3 · Follow-up & appointment</h2><span class="small muted">Unlocks: Follow-up · Appointment Booked</span></div><div class="card-b"><div class="form" style="margin:0;grid-template-columns:repeat(3,1fr)">
@@ -537,33 +565,33 @@ function leadPage() {
       <div class="full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn-sm btn-navy" onclick="apptModal('${l.id}')">📅 Schedule meeting & send invite</button>${l.appt && l.appt.link ? `<span class="small">Link: <a href="${esc(l.appt.link)}" target="_blank">${esc(l.appt.link)}</a></span>` : '<span class="small muted">Creates a Zoom / Google Meet link and sends it by email + WhatsApp</span>'}</div>
     </div></div></div>
 
-    <div class="card ${NEED.has('proposal') ? 'need-box' : ''}" data-path="proposal"><div class="card-h"><h2>4 · Proposal</h2><span class="small muted">Unlocks: Proposal Sent — PDF required</span></div><div class="card-b">
-      ${l.proposals.map((p, i) => `<div class="qrow"><span>📄 <b>${esc(p.pdf || 'No PDF')}</b> · ${esc(zoneOf(p.zone).name)} · ${p.visas} visa(s) · ${fmtDate(p.at, false)} ${p.uploaded ? '<span class="tag">uploaded</span>' : '<span class="tag">generated</span>'}</span><span style="display:flex;gap:6px;align-items:center"><b>${p.total ? aed(p.total) : ''}</b><button class="btn btn-sm" onclick="viewProposal('${l.id}',${i})">View</button></span></div>`).join('') || '<div class="muted small">No proposal yet.</div>'}
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm btn-primary" onclick="proposalFor('${l.id}')">🧮 Create with calculator</button><label class="btn btn-sm">⬆ Upload proposal PDF<input type="file" accept="application/pdf" hidden onchange="uploadPdf('${l.id}',this)"></label><span class="small muted">or send from WhatsApp after it's attached</span></div>
+    <div class="card ${NEED.has('proposal') ? 'need-box' : ''}" data-path="proposal"><div class="card-h"><h2>4 · Proposal</h2><span class="small muted">Unlocks: Proposal Sent - PDF required</span></div><div class="card-b">
+      ${l.proposals.map((p, i) => `<div class="qrow"><span><b>${esc(p.pdf || 'No PDF')}</b> · ${esc(zoneOf(p.zone).name)} · ${p.visas} visa(s) · ${fmtDate(p.at, false)} ${p.uploaded ? '<span class="tag">uploaded</span>' : '<span class="tag">generated</span>'}</span><span style="display:flex;gap:6px;align-items:center"><b>${p.total ? aed(p.total) : ''}</b><button class="btn btn-sm" onclick="viewProposal('${l.id}',${i})">View</button></span></div>`).join('') || '<div class="muted small">No proposal yet.</div>'}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm btn-primary" onclick="proposalFor('${l.id}')">Create with calculator</button><label class="btn btn-sm">Upload proposal PDF<input type="file" accept="application/pdf" hidden onchange="uploadPdf('${l.id}',this)"></label><span class="small muted">or send from WhatsApp after it's attached</span></div>
     </div></div>
 
     <div class="card ${NEED.has('payment.confirm') ? 'need-box' : ''}" data-path="payment.confirm"><div class="card-h"><h2>5 · Payment</h2><span class="small muted">Payment Received needs Accounts confirmation</span></div><div class="card-b">
       <div class="small" style="font-weight:700;margin-bottom:6px">Payment link</div>
       <div class="form" style="margin:0"><div>${req('Amount (AED)', (l.payLink && +l.payLink.amount > 0) || undefined)}${inp(l, 'payLink.amount', 'number')}</div><div>${req('Payment link', (l.payLink && has(l.payLink.url)) || undefined)}<div style="display:flex;gap:6px">${inp(l, 'payLink.url', 'url', 'placeholder="https://pay…"')}<button class="btn btn-sm" onclick="setL('${l.id}','payLink.url','https://pay.quickpathhorizon.com/${l.id}')">Generate</button></div></div></div>
       <div class="small" style="font-weight:700;margin:16px 0 6px">Payment received</div>
-      ${pay.status === 'confirmed' ? `<div class="ai-box" style="background:var(--green-soft);border-color:#A8DDBC">✅ <b style="color:var(--green)">Confirmed by Accounts</b> · ${aed(pay.amount)} · ${esc(pay.mode)} · Ref <b class="mono">${esc(pay.ref)}</b> · ${fmtDate(pay.date, false)}<div class="small muted">Confirmed by ${esc(user(pay.confirmedBy).name)} · ${fmtDate(pay.confirmedAt)}</div></div>`
+      ${pay.status === 'confirmed' ? `<div class="ai-box" style="background:var(--green-soft);border-color:#A8DDBC">✓ <b style="color:var(--green)">Confirmed by Accounts</b> · ${aed(pay.amount)} · ${esc(pay.mode)} · Ref <b class="mono">${esc(pay.ref)}</b> · ${fmtDate(pay.date, false)}<div class="small muted">Confirmed by ${esc(user(pay.confirmedBy).name)} · ${fmtDate(pay.confirmedAt)}</div></div>`
       : `<div class="form" style="margin:0;grid-template-columns:repeat(4,1fr)"><div>${req('Amount received')}${inp(l, 'payment.amount', 'number', pay.status === 'pending' ? 'disabled' : '')}</div><div>${req('Mode')}${pay.status === 'pending' ? `<input value="${esc(pay.mode || '')}" disabled>` : sel(l, 'payment.mode', ['Bank transfer', 'Card (payment link)', 'Cash', 'Cheque'])}</div><div>${req('Reference / txn code', has(pay.ref) || false)}${inp(l, 'payment.ref', 'text', (pay.status === 'pending' ? 'disabled ' : '') + 'placeholder="e.g. FT2611…"')}</div><div>${req('Date')}${inp(l, 'payment.date', 'datetime-local', pay.status === 'pending' ? 'disabled' : '')}</div></div>
-      ${pay.status === 'pending' ? `<div class="dup-box" style="margin-top:10px;background:#FFF8EC;border-color:#F3D19C"><b style="color:var(--amber)">⏳ Awaiting Accounts confirmation</b><span class="small">Sent by ${esc(user(pay.by).name)} ${ago(pay.sentAt)}</span>${ME.role === 'admin' ? `<button class="btn btn-sm btn-primary" onclick="confirmPay('${l.id}')">✅ Confirm (Accounts)</button><button class="btn btn-sm btn-danger" onclick="rejectPay('${l.id}')">Reject</button>` : '<span class="small muted">Only Accounts (Admin) can confirm</span>'}</div>`
+      ${pay.status === 'pending' ? `<div class="dup-box" style="margin-top:10px;background:#FFF8EC;border-color:#F3D19C"><b style="color:var(--amber)">Awaiting Accounts confirmation</b><span class="small">Sent by ${esc(user(pay.by).name)} ${ago(pay.sentAt)}</span>${ME.role === 'admin' ? `<button class="btn btn-sm btn-primary" onclick="confirmPay('${l.id}')">✓ Confirm (Accounts)</button><button class="btn btn-sm btn-danger" onclick="rejectPay('${l.id}')">Reject</button>` : '<span class="small muted">Only Accounts (Admin) can confirm</span>'}</div>`
       : `${pay.status === 'rejected' ? `<div class="small" style="color:var(--red);margin-top:8px">✕ Rejected by Accounts: ${esc(pay.rejectNote || '')}</div>` : ''}<button class="btn btn-sm btn-navy" style="margin-top:10px" onclick="sendPay('${l.id}')">Send to Accounts for confirmation</button>`}`}
     </div></div>
 
-    <div class="card notes"><div class="card-h"><h2>📝 Notes</h2><span class="small muted">Type in Hindi / Hinglish → Polish to English</span></div><div class="card-b">
+    <div class="card notes"><div class="card-h"><h2>Notes</h2><span class="small muted">Type in Hindi / Hinglish → Polish to English</span></div><div class="card-b">
       <textarea id="noteIn" placeholder="e.g. client ne bola 2 visa chahiye, kal call karna hai…"></textarea>
-      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ai btn-sm" onclick="$('noteIn').value=polish($('noteIn').value);toast('✨ Polished by AI Agent')">✨ Polish to English</button><button class="btn btn-primary btn-sm" onclick="addNote('${l.id}')">Save note</button></div>
-      ${[...l.notes].reverse().map((n, i) => `<div class="note"><div class="meta">${esc(user(n.by).name)} · ${fmtDate(n.at)} ${n.polished ? '<span class="ai">✨ AI polished</span>' : ''}</div><div>${esc(n.text)}</div>${!n.polished ? `<button class="btn btn-sm" style="margin-top:4px;padding:2px 8px" onclick="polishNote('${l.id}',${l.notes.length - 1 - i})">✨ Polish</button>` : ''}</div>`).join('') || '<div class="muted small" style="margin-top:10px">No notes yet</div>'}
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-ai btn-sm" onclick="$('noteIn').value=polish($('noteIn').value);toast('Polished by AI Agent')">Polish to English</button><button class="btn btn-primary btn-sm" onclick="addNote('${l.id}')">Save note</button></div>
+      ${[...l.notes].reverse().map((n, i) => `<div class="note"><div class="meta">${esc(user(n.by).name)} · ${fmtDate(n.at)} ${n.polished ? '<span class="ai">AI polished</span>' : ''}</div><div>${esc(n.text)}</div>${!n.polished ? `<button class="btn btn-sm" style="margin-top:4px;padding:2px 8px" onclick="polishNote('${l.id}',${l.notes.length - 1 - i})">Polish</button>` : ''}</div>`).join('') || '<div class="muted small" style="margin-top:10px">No notes yet</div>'}
     </div></div>
   </div>
 
   <div class="lp-side">
     <div class="card"><div class="card-b"><h3 style="font-size:15px;margin-bottom:10px">Lead overview</h3>
-      <div class="ov"><span class="muted small">Current stage</span><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(l.stage)}</b>${l.temp === 'Hot' ? pill('🔥 Hot', 'p-hot') : pill(l.temp)}</div></div>
-      <div class="kv1">${[['Owner', user(l.owner).name], ['Source', l.source + (a.platform ? ' – ' + a.platform : '')], ['Campaign', a.campaign || '—'], ['Ad set', a.adset || '—'], ['Ad name', a.ad || '—'], ['Created', fmtDate(l.createdAt)], ['Last update', ago(l.updatedAt || l.createdAt)]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
-    <details class="trk"><summary>Source & UTM details</summary><div class="kv1">${[['Form', a.form], ['Landing page', a.landing], ['utm_source', u.utm_source], ['utm_medium', u.utm_medium], ['utm_campaign', u.utm_campaign], ['utm_term', u.utm_term], ['utm_content', u.utm_content], ['Click ID', a.clickId]].map(([k, v]) => `<div><span>${k}</span><b class="${k.startsWith('utm') || k === 'Click ID' ? 'mono' : ''}">${esc(v || '—')}</b></div>`).join('')}</div></details>
+      <div class="ov"><span class="muted small">Current stage</span><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(l.stage)}</b>${l.temp === 'Hot' ? pill('Hot', 'p-hot') : pill(l.temp)}</div></div>
+      <div class="kv1">${[['Owner', user(l.owner).name], ['Source', l.source + (a.platform ? ' - ' + a.platform : '')], ['Campaign', a.campaign || '-'], ['Ad set', a.adset || '-'], ['Ad name', a.ad || '-'], ['Created', fmtDate(l.createdAt)], ['Last update', ago(l.updatedAt || l.createdAt)]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    <details class="trk"><summary>Source & UTM details</summary><div class="kv1">${[['Form', a.form], ['Landing page', a.landing], ['utm_source', u.utm_source], ['utm_medium', u.utm_medium], ['utm_campaign', u.utm_campaign], ['utm_term', u.utm_term], ['utm_content', u.utm_content], ['Click ID', a.clickId]].map(([k, v]) => `<div><span>${k}</span><b class="${k.startsWith('utm') || k === 'Click ID' ? 'mono' : ''}">${esc(v || '-')}</b></div>`).join('')}</div></details>
     </div></div>
     <div class="card hist"><div class="card-b"><h3 style="font-size:15px;margin-bottom:8px">History</h3><ul class="tl">${[...l.activity].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
   </div></div></div>`;
@@ -572,7 +600,7 @@ function leadPage() {
 function uploadPdf(id, input) {
   const f = input.files[0]; if (!f) return; if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) return toast('Please upload a PDF file');
   const l = S.leads.find(x => x.id === id);
-  const done = data => { l.proposals.push({ id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: l.req.zone || S.zones[0].id, total: l.value, visas: +l.req.visas || 0, pdf: f.name, uploaded: true, data }); log(l, `Proposal PDF uploaded: ${f.name}`); const r = autoAdvance(l); save(); render(); toast(r ? `📄 PDF attached — auto-moved to <b>${r[1]}</b>` : '📄 PDF attached — fill the qualification details to move to Proposal Sent'); };
+  const done = data => { l.proposals.push({ id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: l.req.zone || S.zones[0].id, total: l.value, visas: +l.req.visas || 0, pdf: f.name, uploaded: true, data }); log(l, `Proposal PDF uploaded: ${f.name}`); const r = autoAdvance(l); save(); render(); toast(r ? `PDF attached - auto-moved to <b>${r[1]}</b>` : 'PDF attached - fill the qualification details to move to Proposal Sent'); };
   if (f.size < 400e3) { const r = new FileReader(); r.onload = () => done(r.result); r.readAsDataURL(f); } else done(null);
 }
 function viewProposal(id, i) {
@@ -585,18 +613,18 @@ function sendPay(id) {
   const l = S.leads.find(x => x.id === id); const p = l.payment || {};
   const m = [[+p.amount > 0, 'Amount received', 'payment.amount'], [has(p.mode), 'Payment mode', 'payment.mode'], [has(p.ref), 'Reference / transaction code', 'payment.ref'], [has(p.date), 'Payment date']].filter(c => !c[0]).map(c => c[1]);
   if (m.length) return toast('Fill: ' + m.join(', '));
-  Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); notify('u1', `💰 Confirm payment ${aed(p.amount)} · ref ${p.ref} · ${l.name}`, l.id); save(); render(); toast('⏳ Sent to Accounts (Faisal) for confirmation');
+  Object.assign(p, { status: 'pending', by: ME.id, sentAt: Date.now() }); l.payment = p; log(l, `Payment ${aed(p.amount)} (ref ${p.ref}) sent to Accounts for confirmation`); notify('u1', `Confirm payment ${aed(p.amount)} · ref ${p.ref} · ${l.name}`, l.id); save(); render(); toast('Sent to Accounts (Faisal) for confirmation');
 }
-function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✅ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); autoAdvance(l); l.followUp = null; notify(l.owner, `✅ Payment confirmed for ${l.name} — now a customer with Operations`, l.id); openCaseFor(l); save(); render(); toast('✅ Payment confirmed — lead moved to Payment Received & Customers'); }
+function confirmPay(id) { const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'confirmed', confirmedBy: ME.id, confirmedAt: Date.now() }); log(l, `✓ Payment ${aed(l.payment.amount)} ref ${l.payment.ref} confirmed by Accounts`); autoAdvance(l); l.followUp = null; notify(l.owner, `✓ Payment confirmed for ${l.name} - now a customer with Operations`, l.id); openCaseFor(l); save(); render(); toast('✓ Payment confirmed - lead moved to Payment Received & Customers'); }
 function rejectPay(id) { const n = prompt('Reason for rejecting (e.g. amount not received in bank)'); if (n === null) return; const l = S.leads.find(x => x.id === id); Object.assign(l.payment, { status: 'rejected', rejectNote: n }); log(l, 'Payment rejected by Accounts: ' + n); save(); render(); }
 function addNote(id) { const l = S.leads.find(x => x.id === id); const t = $('noteIn').value.trim(); if (!t) return toast('Write a note first'); const isP = Object.values(POLISHED).includes(t) || (/^[A-Z]/.test(t) && /[.!?]$/.test(t)); l.notes.push({ by: ME.id, at: Date.now(), text: t, polished: isP }); log(l, 'Note added'); save(); render(); toast('Note saved'); }
-function polishNote(id, i) { const l = S.leads.find(x => x.id === id); l.notes[i].orig = l.notes[i].text; l.notes[i].text = polish(l.notes[i].text); l.notes[i].polished = true; log(l, 'Note polished to English by AI Agent', 'ai'); save(); render(); toast('✨ Note polished'); }
-function runAI(id) { const l = S.leads.find(x => x.id === id); toast('✨ AI Agent reading notes & chat…'); setTimeout(() => { l.ai = Object.assign(aiNext(l), { at: Date.now() }); const nx = nextStage(l); if (nx && missing(l, nx).length) l.ai.next += ` To unlock "${nx}": ${missing(l, nx).join(', ')}.`; log(l, 'AI next step generated', 'ai'); save(); render(); }, 700); }
+function polishNote(id, i) { const l = S.leads.find(x => x.id === id); l.notes[i].orig = l.notes[i].text; l.notes[i].text = polish(l.notes[i].text); l.notes[i].polished = true; log(l, 'Note polished to English by AI Agent', 'ai'); save(); render(); toast('Note polished'); }
+function runAI(id) { const l = S.leads.find(x => x.id === id); toast('AI Agent reading notes & chat…'); setTimeout(() => { l.ai = Object.assign(aiNext(l), { at: Date.now() }); const nx = nextStage(l); if (nx && missing(l, nx).length) l.ai.next += ` To unlock "${nx}": ${missing(l, nx).join(', ')}.`; log(l, 'AI next step generated', 'ai'); save(); render(); }, 700); }
 function assign(id, uid) { const l = S.leads.find(x => x.id === id); l.owner = uid; log(l, 'Reassigned to ' + user(uid).name); save(); render(); toast('Assigned to ' + user(uid).name); }
 function delLead(id) { if (!confirm('Delete this lead permanently?')) return; S.leads = S.leads.filter(l => l.id !== id); save(); drawer = null; render(); toast('Lead deleted'); }
 function tagModal(id) {
   const l = S.leads.find(x => x.id === id); const opts = ['Hot lead', 'Price asked', 'Interested', 'Family visa', 'Golden visa', 'Call back', 'VIP', 'Budget low', 'Docs ready', 'Not interested'];
-  modal(`<h2>Tags · ${esc(l.name)}</h2><div class="opts" style="margin-top:12px">${opts.map(t => `<label class="opt ${l.tags.includes(t) ? 'on' : ''}"><input type="checkbox" value="${t}" ${l.tags.includes(t) ? 'checked' : ''}> ${t} ${['Interested', 'Price asked', 'Hot lead'].includes(t) ? '<em>🤖 AI</em>' : ''}</label>`).join('')}</div><p class="small muted">🤖 tags switch on the AI Agent for this chat — it reads new WhatsApp messages and updates Hot/Warm/Cold and follow-up date.</p><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveTags('${id}')">Save</button></div>`);
+  modal(`<h2>Tags · ${esc(l.name)}</h2><div class="opts" style="margin-top:12px">${opts.map(t => `<label class="opt ${l.tags.includes(t) ? 'on' : ''}"><input type="checkbox" value="${t}" ${l.tags.includes(t) ? 'checked' : ''}> ${t} ${['Interested', 'Price asked', 'Hot lead'].includes(t) ? '<em>AI</em>' : ''}</label>`).join('')}</div><p class="small muted">tags switch on the AI Agent for this chat - it reads new WhatsApp messages and updates Hot/Warm/Cold and follow-up date.</p><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveTags('${id}')">Save</button></div>`);
 }
 function saveTags(id) { const l = S.leads.find(x => x.id === id); const keep = l.tags.filter(t => ['Duplicate', 'Re-enquired'].includes(t)); l.tags = keep.concat([...document.querySelectorAll('#modalBody input:checked')].map(i => i.value)); log(l, 'Tags updated: ' + l.tags.join(', ')); save(); closeModal(); render(); }
 function openCaseFor(l, silent) {
@@ -606,8 +634,8 @@ function openCaseFor(l, silent) {
   const c = { id: 'C' + (3001 + S.cases.length + Math.floor(Math.random() * 100)), leadId: l.id, company: l.name.split(' ')[0] + ' ' + (l.req.activity || 'Trading').split(' ')[0] + (l.req.type === 'Mainland' ? ' LLC' : ' FZ-LLC'), stage: OPS_STAGES[0], owner, docs, zone: l.req.zone, visas: +l.req.visas || 0, startedAt: Date.now(), licenceNo: '', licenceExpiry: null, visaHolders: [], log: [{ at: Date.now(), by: 'system', text: `Case opened from ${l.id} (payment confirmed, sold by ${user(l.owner).name}) · assigned to ${user(owner).name}` }] };
   S.cases.unshift(c); if (silent) return;
   log(l, `Operations case ${c.id} opened → ${user(owner).name}`, 'system');
-  notify(owner, `🏢 New customer case ${c.id}: ${c.company} (paid ${l.payment ? aed(l.payment.amount) : ''})`, 'case:' + c.id); notify('u1', `🏢 ${l.name} is now a customer → ${user(owner).name} (Operations)`, 'case:' + c.id);
-  setTimeout(() => toast(`🗂️ Customer case ${c.id} created → ${user(owner).name}`), 1200);
+  notify(owner, `New customer case ${c.id}: ${c.company} (paid ${l.payment ? aed(l.payment.amount) : ''})`, 'case:' + c.id); notify('u1', `${l.name} is now a customer → ${user(owner).name} (Operations)`, 'case:' + c.id);
+  setTimeout(() => toast(`Customer case ${c.id} created → ${user(owner).name}`), 1200);
 }
 function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadId: id, type: l.req.type || 'Free Zone', zone: has(l.req.zone) ? l.req.zone : S.zones.find(z => z.type === (l.req.type || 'Free Zone')).id, acts: 3, visas: +l.req.visas || 1, addons: ['medical'], disc: 0 }; drawer = null; go('calculator'); }
 
@@ -617,18 +645,18 @@ function addLeadModal() {
     <div><label>Full name *</label><input id="nName"></div><div><label>Phone *</label><input id="nPhone" placeholder="+971 5x xxx xxxx" oninput="liveDup()"></div>
     <div><label>Email</label><input id="nEmail" oninput="liveDup()"></div><div><label>Nationality</label><select id="nNat">${NATIONALITIES.map(n => `<option>${n}</option>`).join('')}</select></div>
     <div><label>Source</label><select id="nSrc">${SOURCES.map(n => `<option ${n === 'Walk-in' ? 'selected' : ''}>${n}</option>`).join('')}</select></div><div><label>Service</label><select id="nSvc">${SERVICES.map(n => `<option>${n}</option>`).join('')}</select></div>
-    <div><label>Campaign (optional)</label><input id="nCamp" placeholder="e.g. Referral – Ahmed"></div><div><label>Visas</label><input type="number" id="nVisas" value="1"></div>
-    <div class="full"><label>Note</label><textarea id="nNote" placeholder="Hinglish is fine — polish later"></textarea></div><div class="full" id="dupWarn"></div>
+    <div><label>Campaign (optional)</label><input id="nCamp" placeholder="e.g. Referral - Ahmed"></div><div><label>Visas</label><input type="number" id="nVisas" value="1"></div>
+    <div class="full"><label>Note</label><textarea id="nNote" placeholder="Hinglish is fine - polish later"></textarea></div><div class="full" id="dupWarn"></div>
   </div><div class="modal-f"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveNew()">Create lead</button></div>`);
 }
-function liveDup() { const d = findDup($('nPhone').value, $('nEmail').value); $('dupWarn').innerHTML = d ? `<div class="dup-box"><b>⚠ Already in CRM:</b> <span>${d.id} · ${esc(d.name)} · ${esc(d.stage)} · owner ${esc(user(d.owner).name)}</span><span class="small muted">Saving will tag the new lead as Duplicate.</span></div>` : ''; }
+function liveDup() { const d = findDup($('nPhone').value, $('nEmail').value); $('dupWarn').innerHTML = d ? `<div class="dup-box"><b>Already in CRM:</b> <span>${d.id} · ${esc(d.name)} · ${esc(d.stage)} · owner ${esc(user(d.owner).name)}</span><span class="small muted">Saving will tag the new lead as Duplicate.</span></div>` : ''; }
 function saveNew() {
   const v = k => $(k).value.trim(); if (!v('nName') || !v('nPhone')) return toast('Name and phone are required');
   const { l, dup } = ingest({ name: v('nName'), phone: v('nPhone'), email: v('nEmail'), nationality: v('nNat'), source: v('nSrc'), service: v('nSvc'), visas: v('nVisas'), note: v('nNote'), owner: ME.role === 'sales' ? ME.id : '', attr: { platform: v('nSrc'), campaign: v('nCamp'), adset: '', ad: '', form: 'Manual entry', utm: {}, clickId: '', landing: '' } });
-  closeModal(); render(); openLead(l.id); toast(dup ? '⚠ Saved & tagged DUPLICATE of ' + dup.id : '✅ Lead created → ' + user(l.owner).name);
+  closeModal(); render(); openLead(l.id); toast(dup ? 'Saved & tagged DUPLICATE of ' + dup.id : '✓ Lead created → ' + user(l.owner).name);
 }
 function simModal() {
-  modal(`<h2>⚡ Simulate incoming lead</h2><div class="muted small">Shows how a lead lands from Meta Lead Ads, Google Ads or the website with campaign, ad set, ad and UTM parameters — then gets duplicate-checked and auto-assigned.</div>
+  modal(`<h2>Simulate incoming lead</h2><div class="muted small">Shows how a lead lands from Meta Lead Ads, Google Ads or the website with campaign, ad set, ad and UTM parameters - then gets duplicate-checked and auto-assigned.</div>
   <div class="form">
     <div><label>Source</label><select id="sSrc" onchange="simFill()"><option>Meta</option><option>Google</option><option>Website</option><option>WhatsApp</option></select></div>
     <div><label>Campaign</label><select id="sCamp" onchange="simFill(true)"></select></div>
@@ -641,10 +669,10 @@ function simModal() {
 }
 function simFill(keepCamp) {
   const src = $('sSrc').value; const list = CAMPAIGNS[src] || [];
-  if (!keepCamp) $('sCamp').innerHTML = list.length ? list.map((c, i) => `<option value="${i}">${esc(c.campaign)}</option>`).join('') : `<option value="-1">${src === 'WhatsApp' ? 'Click-to-WhatsApp – Freezone' : '(organic / direct)'}</option>`;
+  if (!keepCamp) $('sCamp').innerHTML = list.length ? list.map((c, i) => `<option value="${i}">${esc(c.campaign)}</option>`).join('') : `<option value="-1">${src === 'WhatsApp' ? 'Click-to-WhatsApp - Freezone' : '(organic / direct)'}</option>`;
   const c = list[+$('sCamp').value];
-  $('sAdset').innerHTML = c ? c.adsets.map(a => `<option>${esc(a)}</option>`).join('') : '<option value="">—</option>';
-  $('sAd').innerHTML = c ? c.ads.map(a => `<option>${esc(a)}</option>`).join('') : '<option value="">—</option>';
+  $('sAdset').innerHTML = c ? c.adsets.map(a => `<option>${esc(a)}</option>`).join('') : '<option value="">-</option>';
+  $('sAd').innerHTML = c ? c.ads.map(a => `<option>${esc(a)}</option>`).join('') : '<option value="">-</option>';
   const s = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
   const base = 'https://quickpathhorizon.com/business-setup/';
   $('sUrl').value = src === 'Meta' ? `${base}?utm_source=instagram&utm_medium=paid_social&utm_campaign=${s(c.campaign)}&utm_term=${s(c.adsets[0])}&utm_content=${s(c.ads[0])}&fbclid=IwAR${Math.random().toString(36).slice(2, 12)}`
@@ -659,11 +687,11 @@ function simGo() {
   let utm = {}, clickId = '', landing = '';
   try { const u = new URL($('sUrl').value); u.searchParams.forEach((v, k) => { if (k.startsWith('utm_')) utm[k] = v; if (k === 'gclid' || k === 'fbclid') clickId = k + '=' + v; }); landing = u.origin + u.pathname; } catch (e) { }
   const attr = { platform: src === 'Meta' ? (utm.utm_source === 'facebook' ? 'Facebook' : 'Instagram') : src === 'Google' ? 'Google Search' : src === 'WhatsApp' ? 'WhatsApp +971 58 146 4678' : 'Organic / Referral',
-    campaign: c ? c.campaign : (src === 'WhatsApp' ? 'Click-to-WhatsApp – Freezone' : '(none)'), adset: $('sAdset').value, ad: $('sAd').value, form: src === 'Meta' ? (c.form || 'Instant form') : src === 'Google' ? 'Website enquiry form' : src === 'Website' ? 'Contact Us form' : '', utm, clickId, landing: src === 'Meta' && c.form !== 'Website (Pixel)' ? '(Instant form)' : landing };
+    campaign: c ? c.campaign : (src === 'WhatsApp' ? 'Click-to-WhatsApp - Freezone' : '(none)'), adset: $('sAdset').value, ad: $('sAd').value, form: src === 'Meta' ? (c.form || 'Instant form') : src === 'Google' ? 'Website enquiry form' : src === 'Website' ? 'Contact Us form' : '', utm, clickId, landing: src === 'Meta' && c.form !== 'Website (Pixel)' ? '(Instant form)' : landing };
   const first = $('sName').value.split(' ')[0].toLowerCase();
-  const { l, dup } = ingest({ name: $('sName').value, phone: $('sPhone').value, email: dup0($('sPhone').value) || (first + Math.floor(Math.random() * 99) + '@gmail.com'), source: src, attr, visas: 1 + Math.floor(Math.random() * 3), activity: ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)], sendWelcome: true, firstMsg: src === 'WhatsApp' ? 'Hi, I saw your ad. What is the cost for freezone licence?' : `New ${src} lead — form submitted` });
+  const { l, dup } = ingest({ name: $('sName').value, phone: $('sPhone').value, email: dup0($('sPhone').value) || (first + Math.floor(Math.random() * 99) + '@gmail.com'), source: src, attr, visas: 1 + Math.floor(Math.random() * 3), activity: ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)], sendWelcome: true, firstMsg: src === 'WhatsApp' ? 'Hi, I saw your ad. What is the cost for freezone licence?' : `New ${src} lead - form submitted` });
   closeModal(); render(); openLead(l.id);
-  toast(dup ? `⚠ ${src} lead flagged DUPLICATE of ${dup.id} → ${user(l.owner).name}` : `✅ New ${src} lead → ${user(l.owner).name} · WhatsApp welcome sent`);
+  toast(dup ? `${src} lead flagged DUPLICATE of ${dup.id} → ${user(l.owner).name}` : `✓ New ${src} lead → ${user(l.owner).name} · WhatsApp welcome sent`);
 }
 function dup0(phone) { const d = findDup(phone, ''); return d ? d.email : ''; }
 
@@ -681,14 +709,14 @@ function vWhatsApp() {
   return `<div class="toolbar"><span class="small muted">Filter chats by tag:</span><button class="wtag ${!waTagF ? 'on' : ''}" onclick="waTagF='';render()">All</button>${WA_TAGS.map(([t, c]) => `<button class="wtag ${waTagF === t ? 'on' : ''}" onclick="waTagF='${t}';render()"><i style="background:${c}"></i>${t} · ${visibleLeads().filter(x => S.chats[x.id] && x.tags.includes(t)).length}</button>`).join('')}</div><div class="card wa"><div class="wa-list">${L.map(x => { const m = last(x); const un = x.id === waOpen ? 0 : unread(x); return `<div class="wa-item ${x.id === waOpen ? 'on' : ''}" onclick="waOpen='${x.id}';render()">${av(x.owner, 34)}<div style="min-width:0"><b>${esc(x.name)}</b><div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${m.from === 'out' ? '✓✓ ' : ''}${esc(m.text || '')}</div><div>${x.tags.filter(t => WA_TAGS.some(w => w[0] === t)).map(t => `<span class="wtag-mini"><i style="background:${WA_TAGS.find(w => w[0] === t)[1]}"></i>${t}</span>`).join('')}</div></div><div class="r">${m.at ? ago(m.at) : ''}<br>${un ? `<span class="un">${un}</span>` : ''}</div></div>`; }).join('') || '<div class="empty">No chats</div>'}</div>
   <div class="wa-chat">${l ? `<div class="wa-ch">${av(l.owner, 34)}<div><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${pill(l.stage)} ${l.dupOf ? pill('Duplicate', 'p-dup') : ''}</div></div><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" onclick="openLead('${l.id}')">Open lead</button><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, '')}"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg> Open in WhatsApp ↗</a></div></div>
     <div class="wa-tags"><span class="small muted">Tags:</span>${waTagChips(l)}</div>
-    ${left > 0 ? `<div class="win24" style="background:var(--green-soft);color:var(--green)">🟢 24-hour window open · ${Math.floor(left / H)}h ${Math.floor(left % H / 60e3)}m left for free replies</div>` : `<div class="win24">⏱ 24-hour window closed — only Meta-approved templates can be sent</div>`}
-    <div class="wa-msgs">${msgs.map(m => `<div class="msg ${m.from}">${esc(m.text)}<span class="t">${m.from === 'out' ? esc(user(m.by).name) + ' · ' : ''}${fmtDate(m.at)} ${m.from === 'out' ? '<span style="color:#34B7F1">✓✓</span>' : ''}</span></div>`).join('') || '<div class="empty">No messages yet — send a template to start</div>'}</div>
-    <div class="wa-in"><select class="btn btn-sm" onchange="if(this.value){$('waIn').value=WA_TEMPLATES[this.value].text.replace('{name}','${esc(l.name.split(' ')[0])}');this.value=''}"><option value="">📋 Templates</option>${WA_TEMPLATES.map((t, i) => `<option value="${i}">${t.name}</option>`).join('')}</select>
+    ${left > 0 ? `<div class="win24" style="background:var(--green-soft);color:var(--green)">24-hour window open · ${Math.floor(left / H)}h ${Math.floor(left % H / 60e3)}m left for free replies</div>` : `<div class="win24">24-hour window closed - only Meta-approved templates can be sent</div>`}
+    <div class="wa-msgs">${msgs.map(m => `<div class="msg ${m.from}">${esc(m.text)}<span class="t">${m.from === 'out' ? esc(user(m.by).name) + ' · ' : ''}${fmtDate(m.at)} ${m.from === 'out' ? '<span style="color:#34B7F1">✓✓</span>' : ''}</span></div>`).join('') || '<div class="empty">No messages yet - send a template to start</div>'}</div>
+    <div class="wa-in"><select class="btn btn-sm" onchange="if(this.value){$('waIn').value=WA_TEMPLATES[this.value].text.replace('{name}','${esc(l.name.split(' ')[0])}');this.value=''}"><option value="">Templates</option>${WA_TEMPLATES.map((t, i) => `<option value="${i}">${t.name}</option>`).join('')}</select>
     <input id="waIn" placeholder="Type a message… (Hinglish ok → Polish)" onkeydown="if(event.key==='Enter')waSend('${l.id}')">
-    <button class="btn btn-sm btn-ai" onclick="$('waIn').value=aiReply(S.leads.find(x=>x.id==='${l.id}'));toast('✨ AI drafted a reply')">✨ AI reply</button>
+    <button class="btn btn-sm btn-ai" onclick="$('waIn').value=aiReply(S.leads.find(x=>x.id==='${l.id}'));toast('AI drafted a reply')">AI reply</button>
     <button class="btn btn-sm" onclick="$('waIn').value=polish($('waIn').value)">Polish</button>
     <button class="wa-send" title="Send" onclick="waSend('${l.id}')"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button></div>` : '<div class="empty">Select a chat</div>'}</div></div>
-  <p class="small muted" style="margin-top:10px">Demo mode: messages are stored in the CRM only. Live version connects the WhatsApp Business Cloud API (Meta) — auto-welcome for new numbers, templates outside 24h, and the AI Agent on 🤖-tagged chats.</p>`;
+  <p class="small muted" style="margin-top:10px">Demo mode: messages are stored in the CRM only. Live version connects the WhatsApp Business Cloud API (Meta) - auto-welcome for new numbers, templates outside 24h, and the AI Agent on -tagged chats.</p>`;
 }
 function last(l) { const c = S.chats[l.id] || []; return c[c.length - 1] || {}; }
 function waSend(id) {
@@ -704,9 +732,9 @@ function vCalc() {
   const zones = S.zones.filter(x => x.type === C.type);
   const leads = visibleLeads().filter(l => !['Lost', 'Junk'].includes(l.stage));
   const cmp = zones.map(x => ({ x, t: estimate(Object.assign({}, C, { zone: x.id })).total })).sort((a, b) => a.t - b.t);
-  return `<div class="calc"><div class="card"><div class="card-h"><h2>🧮 Business setup cost calculator</h2><span class="small muted">Indicative prices · edit in Settings</span></div><div class="card-b">
+  return `<div class="calc"><div class="card"><div class="card-h"><h2>Business setup cost calculator</h2><span class="small muted">Indicative prices · edit in Settings</span></div><div class="card-b">
     <div class="form" style="margin-top:0">
-      <div class="full"><label>Link to lead (fills proposal)</label><select onchange="C.leadId=this.value;const l=S.leads.find(x=>x.id===this.value);if(l){C.type=l.req.type;C.zone=l.req.zone;C.visas=l.req.visas}render()"><option value="">— No lead (quick quote) —</option>${leads.map(l => `<option value="${l.id}" ${l.id === C.leadId ? 'selected' : ''}>${esc(l.name)} · ${l.id} · ${esc(l.stage)}</option>`).join('')}</select></div>
+      <div class="full"><label>Link to lead (fills proposal)</label><select onchange="C.leadId=this.value;const l=S.leads.find(x=>x.id===this.value);if(l){C.type=l.req.type;C.zone=l.req.zone;C.visas=l.req.visas}render()"><option value="">- No lead (quick quote) -</option>${leads.map(l => `<option value="${l.id}" ${l.id === C.leadId ? 'selected' : ''}>${esc(l.name)} · ${l.id} · ${esc(l.stage)}</option>`).join('')}</select></div>
       <div class="full"><label>Jurisdiction</label><div class="seg">${['Free Zone', 'Mainland', 'Offshore'].map(t => `<button class="${C.type === t ? 'on' : ''}" onclick="C.type='${t}';C.zone=S.zones.find(z=>z.type==='${t}').id;render()">${t}</button>`).join('')}</div></div>
       <div class="full"><label>${C.type === 'Free Zone' ? 'Free zone' : 'Authority'}</label><div class="zone-cards">${zones.map(x => `<button class="zc ${x.id === C.zone ? 'on' : ''}" onclick="C.zone='${x.id}';render()"><b>${esc(x.name)}</b><span>${esc(x.emirate)} · from ${aed(x.licence)}</span></button>`).join('')}</div></div>
       <div><label>Business activities</label><input type="number" min="1" max="10" value="${C.acts}" onchange="C.acts=+this.value;render()"><span class="small muted">${z.inclActs} included</span></div>
@@ -723,8 +751,8 @@ function vCalc() {
       <div class="qrow sub"><span>VAT 5% on service fee</span><span>${aed(e.vat)}</span></div>
       <div class="qrow sum"><span>Total</span><span>${aed(e.total)}</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px">
-        <button class="btn btn-primary" onclick="saveProposal()" ${lead ? '' : 'disabled title="Link a lead first"'}>💾 Save proposal to lead</button>
-        <button class="btn" onclick="printQuote()">🖨 Print / PDF</button>
+        <button class="btn btn-primary" onclick="saveProposal()" ${lead ? '' : 'disabled title="Link a lead first"'}>Save proposal to lead</button>
+        <button class="btn" onclick="printQuote()">Print / PDF</button>
         <a class="btn btn-wa" target="_blank" href="${waLink(lead ? lead.phone : '', quoteText(e, lead))}">💬 Send on WhatsApp</a>
       </div></div></div>
     <div class="card" style="margin-top:16px"><div class="card-h"><h2>Compare ${C.type === 'Free Zone' ? 'free zones' : 'options'}</h2><span class="small muted">same visas & add-ons</span></div><div class="card-b">${bars(cmp.map(({ x, t }) => [x.name, t, aed(t)]))}</div></div></div>
@@ -737,13 +765,13 @@ function saveProposal() {
   l.proposals.push(p); l.value = e.total; l.req.zone = C.zone; l.req.type = C.type; l.req.visas = e.visas;
   log(l, `Proposal ${p.id} created · ${e.z.name} · ${aed(e.total)}`);
   const r = autoAdvance(l); const before = !!r;
-  save(); render(); toast(`💾 Proposal ${p.id} (PDF) saved to ${l.name}${before ? ' · auto-moved to ' + r[1] : missing(l, 'Proposal Sent').length ? ' · qualify the lead first to move to Proposal Sent' : ''}`);
+  save(); render(); toast(`Proposal ${p.id} (PDF) saved to ${l.name}${before ? ' · auto-moved to ' + r[1] : missing(l, 'Proposal Sent').length ? ' · qualify the lead first to move to Proposal Sent' : ''}`);
 }
 function printQuote() {
   const e = estimate(C); const l = S.leads.find(x => x.id === C.leadId); const pa = $('printArea'); pa.hidden = false;
   pa.innerHTML = `<div style="padding:40px;font-family:'Libre Franklin',sans-serif;color:#0E2A47"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #E46E1B;padding-bottom:16px"><img src="logo.png" style="height:56px"><div style="text-align:right;font-size:12px">Quick Path Horizon Corporate Services<br>Dubai, UAE · 0581464678<br>Info@quickpathhorizon.com</div></div>
   <h1 style="margin:24px 0 4px">Business Setup Proposal</h1><div style="color:#5A6B7D">${l ? 'Prepared for ' + esc(l.name) + ' · ' : ''}${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })} · valid 7 days</div>
-  <h3 style="margin-top:24px">${esc(e.z.name)} — ${esc(e.z.type)} · ${e.visas} visa(s) · ${C.acts} activities</h3>
+  <h3 style="margin-top:24px">${esc(e.z.name)} - ${esc(e.z.type)} · ${e.visas} visa(s) · ${C.acts} activities</h3>
   <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:14px">${e.rows.map(r => `<tr><td style="padding:8px;border-bottom:1px solid #E3E8EE">${esc(r[0])}</td><td style="padding:8px;border-bottom:1px solid #E3E8EE;text-align:right">${aed(r[1])}</td></tr>`).join('')}
   <tr><td style="padding:8px;border-bottom:1px solid #E3E8EE">QPH service fee${e.disc ? ' (after ' + C.disc + '% discount)' : ''}</td><td style="padding:8px;border-bottom:1px solid #E3E8EE;text-align:right">${aed(e.feeNet)}</td></tr>
   <tr><td style="padding:8px">VAT 5% on service fee</td><td style="padding:8px;text-align:right">${aed(e.vat)}</td></tr>
@@ -759,11 +787,11 @@ function vCampaigns() {
   const groups = {}; L.forEach(l => { const k = key(l); if (!k || k === '(none)') return; (groups[k] = groups[k] || []).push(l); });
   const rows = Object.entries(groups).map(([k, arr]) => { const won = arr.filter(l => l.stage === 'Closed Won'); const q = arr.filter(l => STAGES.indexOf(l.stage) >= 5 && STAGES.indexOf(l.stage) <= 9); const spend = campTab === 'campaign' ? (S.adSpend[k] || 0) : 0; return { k, n: arr.length, dup: arr.filter(l => l.dupOf).length, q: q.length, won: won.length, rev: won.reduce((s, l) => s + (l.payment ? l.payment.amount : 0), 0), spend, src: arr[0].source }; }).sort((a, b) => b.n - a.n);
   const tot = rows.reduce((s, r) => ({ n: s.n + r.n, won: s.won + r.won, rev: s.rev + r.rev, spend: s.spend + r.spend }), { n: 0, won: 0, rev: 0, spend: 0 });
-  return `<div class="hello"><div><h2>Campaigns & UTM tracking</h2><div class="muted">Every lead keeps its campaign, ad set, ad name and UTM parameters — so you see which ad actually brings paying clients.</div></div>${periodSeg()}</div>
-  <div class="stats">${stat('Tracked leads', tot.n, 'with campaign data', '', 'hero')}${stat('Won from ads', tot.won, '', '')}${stat('Revenue from ads', aed(tot.rev), '', '')}${campTab === 'campaign' ? stat('ROAS', tot.spend ? (tot.rev / tot.spend).toFixed(1) + 'x' : '—', 'spend ' + aed(tot.spend), '') : ''}</div>
+  return `<div class="hello"><div><h2>Campaigns & UTM tracking</h2><div class="muted">Every lead keeps its campaign, ad set, ad name and UTM parameters - so you see which ad actually brings paying clients.</div></div>${periodSeg()}</div>
+  <div class="stats">${stat('Tracked leads', tot.n, 'with campaign data', '', 'hero')}${stat('Won from ads', tot.won, '', '')}${stat('Revenue from ads', aed(tot.rev), '', '')}${campTab === 'campaign' ? stat('ROAS', tot.spend ? (tot.rev / tot.spend).toFixed(1) + 'x' : '-', 'spend ' + aed(tot.spend), '') : ''}</div>
   <div class="tabs">${[['campaign', 'Campaign'], ['adset', 'Ad set / Ad group'], ['ad', 'Ad name'], ['utm', 'utm_source / medium'], ['term', 'Keyword (utm_term)']].map(([k, t]) => `<button class="${campTab === k ? 'on' : ''}" onclick="campTab='${k}';render()">${t}</button>`).join('')}</div>
   <div class="card tbl-wrap"><table class="tbl"><thead><tr><th>${campTab === 'campaign' ? 'Campaign' : campTab === 'adset' ? 'Campaign › Ad set' : campTab === 'ad' ? 'Ad set › Ad' : campTab === 'utm' ? 'Source / Medium' : 'Keyword'}</th><th class="num">Leads</th><th class="num">Duplicates</th><th class="num">Qualified+</th><th class="num">Won</th><th class="num">Conv %</th><th class="num">Revenue</th>${campTab === 'campaign' ? '<th class="num">Spend</th><th class="num">CPL</th><th class="num">Cost / client</th>' : ''}</tr></thead><tbody>
-  ${rows.map(r => `<tr class="click" onclick="${campTab === 'campaign' ? `filterGo({campaign:'${esc(r.k).replace(/'/g, "\\'")}'})` : `$('q').value='${esc(r.k.split(' › ').pop().split(' / ')[0]).replace(/'/g, "\\'")}';filterGo({})`}"><td><b>${esc(r.k)}</b><span class="sub">${pill(r.src)}</span></td><td class="num">${r.n}</td><td class="num">${r.dup ? `<span class="pill p-dup">${r.dup}</span>` : 0}</td><td class="num">${r.q}</td><td class="num">${r.won}</td><td class="num">${Math.round(r.won / r.n * 100)}%</td><td class="num">${aed(r.rev)}</td>${campTab === 'campaign' ? `<td class="num">${aed(r.spend)}</td><td class="num">${r.spend ? aed(r.spend / (r.n - r.dup || 1)) : '—'}</td><td class="num">${r.spend && r.won ? aed(r.spend / r.won) : '—'}</td>` : ''}</tr>`).join('') || '<tr><td colspan="10"><div class="empty">No tracked leads in this period</div></td></tr>'}
+  ${rows.map(r => `<tr class="click" onclick="${campTab === 'campaign' ? `filterGo({campaign:'${esc(r.k).replace(/'/g, "\\'")}'})` : `$('q').value='${esc(r.k.split(' › ').pop().split(' / ')[0]).replace(/'/g, "\\'")}';filterGo({})`}"><td><b>${esc(r.k)}</b><span class="sub">${pill(r.src)}</span></td><td class="num">${r.n}</td><td class="num">${r.dup ? `<span class="pill p-dup">${r.dup}</span>` : 0}</td><td class="num">${r.q}</td><td class="num">${r.won}</td><td class="num">${Math.round(r.won / r.n * 100)}%</td><td class="num">${aed(r.rev)}</td>${campTab === 'campaign' ? `<td class="num">${aed(r.spend)}</td><td class="num">${r.spend ? aed(r.spend / (r.n - r.dup || 1)) : '-'}</td><td class="num">${r.spend && r.won ? aed(r.spend / r.won) : '-'}</td>` : ''}</tr>`).join('') || '<tr><td colspan="10"><div class="empty">No tracked leads in this period</div></td></tr>'}
   </tbody></table></div><p class="small muted">CPL excludes duplicates, so the same person clicking two ads is not counted twice. Ad spend is entered in Settings (or synced from Meta / Google Ads in the live version).</p>`;
 }
 
@@ -771,7 +799,7 @@ function vCampaigns() {
 function vOps() {
   const cs = visibleCases();
   return `<div class="toolbar"><div class="seg"><button class="${!opsMine ? 'on' : ''}" onclick="opsMine=false;render()">All cases</button><button class="${opsMine ? 'on' : ''}" onclick="opsMine=true;render()">${ME.role === 'ops' ? 'My cases' : 'Ops team'}</button></div>${msel('ops', 'stage', OPS_STAGES, 'Ops stages')}${msel('ops', 'owner', TEAM.filter(t => t.role === 'ops').map(t => [t.id, t.name]), 'Ops owners')}${anyF(opsFilter) ? `<button class="btn btn-sm" onclick="opsFilter={stage:[],owner:[]};render()">Clear filters</button>` : ''}<span class="count">${cs.length} cases · paid customers arrive here automatically</span></div>
-  <div class="kanban">${OPS_STAGES.map((s, i) => { const arr = cs.filter(c => c.stage === s); return `<div class="kcol"><h3><span>${s}</span><span>${arr.length}</span></h3>${arr.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const dn = DOCS.filter(d => c.docs[d]).length; return `<div class="kcard" onclick="openCase('${c.id}')"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(c.company)}</b>${av(c.owner, 22)}</div><div class="sub">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)} · ${c.visas} visa</div><div class="sub">📄 ${dn}/${DOCS.length} docs</div><div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></div>`; }).join('')}</div>`; }).join('')}</div>`;
+  <div class="kanban">${OPS_STAGES.map((s, i) => { const arr = cs.filter(c => c.stage === s); return `<div class="kcol"><h3><span>${s}</span><span>${arr.length}</span></h3>${arr.map(c => { const l = S.leads.find(x => x.id === c.leadId) || {}; const dn = DOCS.filter(d => c.docs[d]).length; return `<div class="kcard" onclick="openCase('${c.id}')"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(c.company)}</b>${av(c.owner, 22)}</div><div class="sub">${esc(l.name || '')} · ${esc(zoneOf(c.zone).name)} · ${c.visas} visa</div><div class="sub">${dn}/${DOCS.length} docs</div><div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></div>`; }).join('')}</div>`; }).join('')}</div>`;
 }
 function caseDrawer() {
   const c = S.cases.find(x => x.id === drawer.id); if (!c) { closeDrawer(); return ''; }
@@ -781,14 +809,14 @@ function caseDrawer() {
   <div style="margin-top:10px" class="stepper">${OPS_STAGES.map((s, i) => `<button class="${i < si ? 'done' : i === si ? 'cur' : ''}" ${canEdit ? `onclick="setOps('${c.id}',${i})"` : 'disabled'}>${i < si ? '✓ ' : ''}${s}</button>`).join('')}</div>
   <div class="dr-actions"><a class="btn btn-wa btn-sm" target="_blank" href="${waLink(l.phone, WA_TEMPLATES[4].text.replace('{name}', l.name.split(' ')[0]))}">💬 Request documents</a>${ME.role === 'admin' ? `<select class="btn btn-sm" onchange="opsAssign('${c.id}',this.value)">${TEAM.filter(t => t.role === 'ops').map(t => `<option value="${t.id}" ${c.owner === t.id ? 'selected' : ''}>Ops: ${t.name}</option>`).join('')}</select>` : ''}${l.id ? `<button class="btn btn-sm" onclick="openLead('${l.id}')">Sales lead ${l.id}</button>` : ''}</div></div>
   <div class="dr-b">
-    <div class="card"><div class="card-h"><h2>📄 Documents</h2><span class="small muted">${DOCS.filter(d => c.docs[d]).length}/${DOCS.length} · required to pass "Documents Collected"</span></div><div class="card-b checks">${DOCS.map(d => `<div class="check ${c.docs[d] ? 'done' : ''}" ${canEdit ? `onclick="toggleDoc('${c.id}','${d}')"` : ''}>${c.docs[d] ? '✅' : '⬜'} ${d}</div>`).join('')}</div></div>
-    <div class="card"><div class="card-h"><h2>🏛 Licence & visas</h2></div><div class="card-b"><div class="form" style="margin:0">
+    <div class="card"><div class="card-h"><h2>Documents</h2><span class="small muted">${DOCS.filter(d => c.docs[d]).length}/${DOCS.length} · required to pass "Documents Collected"</span></div><div class="card-b checks">${DOCS.map(d => `<div class="check ${c.docs[d] ? 'done' : ''}" ${canEdit ? `onclick="toggleDoc('${c.id}','${d}')"` : ''}>${c.docs[d] ? '✓' : '○'} ${d}</div>`).join('')}</div></div>
+    <div class="card"><div class="card-h"><h2>Licence & visas</h2></div><div class="card-b"><div class="form" style="margin:0">
       <div><label>Trade licence no.</label><input value="${esc(c.licenceNo)}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceNo',this.value)"></div>
       <div><label>Licence expiry</label><input type="date" value="${c.licenceExpiry ? new Date(c.licenceExpiry).toISOString().slice(0, 10) : ''}" ${canEdit ? '' : 'disabled'} onchange="caseSet('${c.id}','licenceExpiry',new Date(this.value).getTime())"></div>
       <div><label>Jurisdiction</label><input value="${esc(z.name)} · ${esc(z.type)}" disabled></div><div><label>Visas in package</label><input value="${c.visas}" disabled></div></div>
-      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map(v => `<tr><td>${esc(v.name)}</td><td>${canEdit ? `<button class="btn btn-sm" onclick="toggleVisa('${c.id}',${c.visaHolders.indexOf(v)})">${v.status === 'Stamped' ? '✅ Stamped' : '⏳ In process'}</button>` : pill(v.status, v.status === 'Stamped' ? 'p-closed-won' : 'p-follow-up')}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${c.visaHolders.length ? `<table class="tbl" style="margin-top:12px"><thead><tr><th>Visa holder</th><th>Status</th><th>Expiry</th></tr></thead><tbody>${c.visaHolders.map(v => `<tr><td>${esc(v.name)}</td><td>${canEdit ? `<button class="btn btn-sm" onclick="toggleVisa('${c.id}',${c.visaHolders.indexOf(v)})">${v.status === 'Stamped' ? '✓ Stamped' : 'In process'}</button>` : pill(v.status, v.status === 'Stamped' ? 'p-closed-won' : 'p-follow-up')}</td><td>${v.expiry ? fmtDate(v.expiry, false) : '-'}</td></tr>`).join('')}</tbody></table>` : ''}
     </div></div>
-    <div class="card"><div class="card-h"><h2>🕑 Case log</h2></div><div class="card-b"><ul class="tl">${[...c.log].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
+    <div class="card"><div class="card-h"><h2>Case log</h2></div><div class="card-b"><ul class="tl">${[...c.log].reverse().map(x => `<li><span class="t">${fmtDate(x.at)}</span><span><b>${esc(user(x.by).name)}</b> · ${esc(x.text)}</span></li>`).join('')}</ul></div></div>
   </div>`;
 }
 function toggleDoc(id, d) { const c = S.cases.find(x => x.id === id); c.docs[d] = !c.docs[d]; c.log.push({ at: Date.now(), by: ME.id, text: `${d} ${c.docs[d] ? 'received' : 'marked missing'}` }); save(); render(); }
@@ -800,20 +828,20 @@ function vRenewals() {
   return `<div class="card tbl-wrap"><div class="card-h"><h2>Licence renewals · next 90 days</h2><span class="small muted">Alerts at 60, 30 and 7 days</span></div><table class="tbl"><thead><tr><th>Company</th><th>Licence</th><th>Expires</th><th>In</th><th></th></tr></thead><tbody>
   ${cs.map(c => { const l = S.leads.find(x => x.id === c.leadId) || { name: '', phone: '' }; return `<tr><td><b style="cursor:pointer" onclick="openCase('${c.id}')">${esc(c.company)}</b><span class="sub">${esc(l.name)} · ${esc(l.phone)}</span></td><td class="mono">${esc(c.licenceNo)}</td><td>${fmtDate(c.licenceExpiry, false)}</td><td>${expiryPill(c.licenceExpiry)}</td><td style="white-space:nowrap"><a class="btn btn-sm btn-wa" target="_blank" href="${waLink(l.phone, `Hi ${l.name.split(' ')[0]}, your trade licence ${c.licenceNo} for ${c.company} expires on ${fmtDate(c.licenceExpiry, false)}. Shall we start the renewal?`)}">💬 Remind</a> <button class="btn btn-sm" onclick="renew('${c.id}')">Renewed +1yr</button></td></tr>`; }).join('') || '<tr><td colspan="5"><div class="empty">No renewals due</div></td></tr>'}</tbody></table></div>`;
 }
-function renew(id) { const c = S.cases.find(x => x.id === id); c.licenceExpiry = Math.max(c.licenceExpiry, Date.now()) + 365 * D; c.log.push({ at: Date.now(), by: ME.id, text: 'Licence renewed +1 year' }); save(); render(); toast('🔁 Renewed until ' + fmtDate(c.licenceExpiry, false)); }
+function renew(id) { const c = S.cases.find(x => x.id === id); c.licenceExpiry = Math.max(c.licenceExpiry, Date.now()) + 365 * D; c.log.push({ at: Date.now(), by: ME.id, text: 'Licence renewed +1 year' }); save(); render(); toast('Renewed until ' + fmtDate(c.licenceExpiry, false)); }
 
 /* ---------------- settings ---------------- */
 function vSettings() {
   const tabs = [['team', 'Team & roles'], ['assign', 'Round robin & notifications'], ['email', 'Email'], ['integrations', 'Lead sources & integrations'], ['utm', 'UTM tester'], ['prices', 'Price list'], ['spend', 'Ad spend'], ['data', 'Data']];
   let b = '';
-  if (setTab === 'team') b = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Dashboard</th><th>Can do</th><th>Cannot do</th></tr></thead><tbody>${TEAM.map(t => `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 28)}<b>${esc(t.name)}</b></div></td><td>${esc(t.title)}</td><td>${t.role === 'admin' ? 'Company dashboard' : t.role === 'sales' ? 'Sales dashboard (own leads)' : 'Operations dashboard'}</td><td class="small">${t.role === 'admin' ? 'Everything: all leads, campaigns, ops, settings, delete, reassign' : t.role === 'sales' ? 'Own leads, follow-ups, WhatsApp, calculator & proposals, duplicates' : 'Ops board, documents, licences, visas, customers, renewals'}</td><td class="small">${t.role === 'admin' ? '—' : t.role === 'sales' ? "Other reps' leads, operations documents, delete" : 'Sales leads & campaigns, delete'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">Demo: 5 users. Live version uses email OTP login per user. New leads are split round-robin between sales; Closed Won cases round-robin between operations.</p>`;
+  if (setTab === 'team') b = `<div class="card tbl-wrap"><table class="tbl"><thead><tr><th>Member</th><th>Role</th><th>Dashboard</th><th>Can do</th><th>Cannot do</th></tr></thead><tbody>${TEAM.map(t => `<tr><td><div style="display:flex;gap:8px;align-items:center">${av(t.id, 28)}<b>${esc(t.name)}</b></div></td><td>${esc(t.title)}</td><td>${t.role === 'admin' ? 'Company dashboard' : t.role === 'sales' ? 'Sales dashboard (own leads)' : 'Operations dashboard'}</td><td class="small">${t.role === 'admin' ? 'Everything: all leads, campaigns, ops, settings, delete, reassign' : t.role === 'sales' ? 'Own leads, follow-ups, WhatsApp, calculator & proposals, duplicates' : 'Ops board, documents, licences, visas, customers, renewals'}</td><td class="small">${t.role === 'admin' ? '-' : t.role === 'sales' ? "Other reps' leads, operations documents, delete" : 'Sales leads & campaigns, delete'}</td></tr>`).join('')}</tbody></table></div><p class="small muted">Demo: 5 users. Live version uses email OTP login per user. New leads are split round-robin between sales; Closed Won cases round-robin between operations.</p>`;
   if (setTab === 'integrations') b = `<div class="int-grid">
-    ${int('🟦 Meta Lead Ads', 'Facebook & Instagram instant forms arrive in seconds via webhook with campaign, ad set, ad name, form name and all form answers.', 'POST /webhooks/meta-leads', 'Connected (demo)')}
-    ${int('🟥 Google Ads', 'Google lead-form extensions + website forms with gclid. Campaign, ad group, keyword (utm_term) captured.', 'POST /webhooks/google-leads', 'Connected (demo)')}
-    ${int('🌐 Website forms + UTM', 'A small script on quickpathhorizon.com saves utm_* , gclid, fbclid and landing page into hidden fields on every form.', '&lt;script src="qph-utm.js"&gt;', 'Snippet ready')}
+    ${int('Meta Lead Ads', 'Facebook & Instagram instant forms arrive in seconds via webhook with campaign, ad set, ad name, form name and all form answers.', 'POST /webhooks/meta-leads', 'Connected (demo)')}
+    ${int('Google Ads', 'Google lead-form extensions + website forms with gclid. Campaign, ad group, keyword (utm_term) captured.', 'POST /webhooks/google-leads', 'Connected (demo)')}
+    ${int('Website forms + UTM', 'A small script on quickpathhorizon.com saves utm_* , gclid, fbclid and landing page into hidden fields on every form.', '&lt;script src="qph-utm.js"&gt;', 'Snippet ready')}
     ${int('💬 WhatsApp Business API', 'Shared team inbox on 0581464678. New numbers become leads, auto-welcome, templates, 24h window, ticks.', 'Meta Cloud API · phone_number_id', 'Demo mode')}
-    ${int('✨ AI Agent', 'Polish Hinglish notes to English, AI next step per lead, AI WhatsApp reply drafts, auto-update stage on 🤖-tagged chats.', 'Claude / Gemini API key', 'Demo mode')}
-    ${int('🧬 Duplicate check', 'Phone (last 9 digits) + email. Duplicate tagged, linked, assigned to same owner, original gets a Re-enquired note.', 'Rule: phone OR email', 'Active')}
+    ${int('AI Agent', 'Polish Hinglish notes to English, AI next step per lead, AI WhatsApp reply drafts, auto-update stage on -tagged chats.', 'Claude / Gemini API key', 'Demo mode')}
+    ${int('Duplicate check', 'Phone (last 9 digits) + email. Duplicate tagged, linked, assigned to same owner, original gets a Re-enquired note.', 'Rule: phone OR email', 'Active')}
   </div>
   <div class="card" style="margin-top:16px"><div class="card-h"><h2>Website UTM capture snippet</h2></div><div class="card-b"><div class="code">&lt;script&gt;(function(){var p=new URLSearchParams(location.search),k=['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid'];k.forEach(function(x){if(p.get(x))localStorage.setItem('qph_'+x,p.get(x))});if(!localStorage.qph_landing)localStorage.qph_landing=location.href;document.querySelectorAll('form').forEach(function(f){k.concat('landing').forEach(function(x){var i=document.createElement('input');i.type='hidden';i.name=x;i.value=localStorage.getItem('qph_'+x)||'';f.appendChild(i)})})})();&lt;/script&gt;</div><p class="small muted">Keeps the first-click UTM even if the visitor browses other pages before submitting the form.</p></div></div>`;
   if (setTab === 'assign') b = assignSettings();
@@ -822,7 +850,7 @@ function vSettings() {
   if (setTab === 'prices') b = `<div class="card tbl-wrap"><div class="card-h"><h2>Free zone & authority price list (AED)</h2><span class="small muted">Used by the cost calculator · indicative demo values</span></div><table class="tbl price-tbl"><thead><tr><th>Zone</th><th>Type</th><th class="num">Licence</th><th class="num">Per visa</th><th class="num">Est. card</th><th class="num">Incl. activities</th><th class="num">Extra activity</th></tr></thead><tbody>${S.zones.map((z, i) => `<tr><td><b>${esc(z.name)}</b><span class="sub">${esc(z.emirate)}</span></td><td>${esc(z.type)}</td>${['licence', 'perVisa', 'estCard', 'inclActs', 'extraAct'].map(k => `<td class="num"><input type="number" value="${z[k]}" onchange="S.zones[${i}].${k}=+this.value;save()"></td>`).join('')}</tr>`).join('')}</tbody></table>
   <div class="card-b"><h3 style="font-size:14px;margin-bottom:8px">Add-ons & service fee</h3><table class="tbl price-tbl"><tbody>${S.addons.map((a, i) => `<tr><td>${esc(a.name)}</td><td class="sub">${a.per === 'visa' ? 'per visa' : 'one-time'}</td><td class="num"><input type="number" value="${a.price}" onchange="S.addons[${i}].price=+this.value;save()"></td></tr>`).join('')}<tr><td><b>QPH service fee</b></td><td></td><td class="num"><input type="number" value="${S.serviceFee}" onchange="S.serviceFee=+this.value;save()"></td></tr></tbody></table></div></div>`;
   if (setTab === 'spend') b = `<div class="card tbl-wrap"><div class="card-h"><h2>Monthly ad spend per campaign (AED)</h2><span class="small muted">Used for CPL, cost per client and ROAS</span></div><table class="tbl price-tbl"><tbody>${Object.keys(S.adSpend).map(k => `<tr><td><b>${esc(k)}</b></td><td class="num"><input type="number" value="${S.adSpend[k]}" onchange="S.adSpend['${esc(k)}']=+this.value;save()"></td></tr>`).join('')}</tbody></table></div>`;
-  if (setTab === 'data') b = `<div class="card"><div class="card-b" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportCSV()">⬇ Export leads CSV (with UTM)</button><button class="btn btn-danger" onclick="if(confirm('Reset all demo data?')){localStorage.removeItem(KEY);S=load();render();toast('Demo data reset')}">↺ Reset demo data</button></div></div>`;
+  if (setTab === 'data') b = `<div class="card"><div class="card-b" style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="exportCSV()">Export leads CSV (with UTM)</button><button class="btn btn-danger" onclick="if(confirm('Reset all demo data?')){localStorage.removeItem(KEY);S=load();render();toast('Demo data reset')}">↺ Reset demo data</button></div></div>`;
   setTimeout(() => { if ($('utmIn')) utmTest(); }, 0);
   return `<div class="tabs">${tabs.map(([k, t]) => `<button class="${setTab === k ? 'on' : ''}" onclick="setTab='${k}';render()">${t}</button>`).join('')}</div>${b}`;
 }
@@ -830,7 +858,7 @@ function int(t, d, code, st) { return `<div class="int"><h3>${t}</h3><p>${d}</p>
 function utmTest() {
   let out = ''; try { const u = new URL($('utmIn').value); const p = {}; u.searchParams.forEach((v, k) => p[k] = v);
     const src = /google/.test(p.utm_source || '') || p.gclid ? 'Google' : /facebook|instagram|meta|fb|ig/.test(p.utm_source || '') || p.fbclid ? 'Meta' : 'Website';
-    out = `<div class="kv three">${[['Detected source', src], ['Landing page', u.origin + u.pathname], ['utm_source', p.utm_source], ['utm_medium', p.utm_medium], ['utm_campaign → Campaign', p.utm_campaign], ['utm_term → Ad set / keyword', p.utm_term], ['utm_content → Ad name', p.utm_content], ['Click ID', p.gclid ? 'gclid=' + p.gclid : p.fbclid ? 'fbclid=' + p.fbclid : '']].map(([k, v]) => `<div><span>${k}</span><b class="mono">${esc(v || '—')}</b></div>`).join('')}</div>`;
+    out = `<div class="kv three">${[['Detected source', src], ['Landing page', u.origin + u.pathname], ['utm_source', p.utm_source], ['utm_medium', p.utm_medium], ['utm_campaign → Campaign', p.utm_campaign], ['utm_term → Ad set / keyword', p.utm_term], ['utm_content → Ad name', p.utm_content], ['Click ID', p.gclid ? 'gclid=' + p.gclid : p.fbclid ? 'fbclid=' + p.fbclid : '']].map(([k, v]) => `<div><span>${k}</span><b class="mono">${esc(v || '-')}</b></div>`).join('')}</div>`;
   } catch (e) { out = '<div class="muted">Enter a full URL starting with https://</div>'; }
   $('utmOut').innerHTML = out;
 }
@@ -838,12 +866,12 @@ function utmTest() {
 /* ---------------- alerts / modal ---------------- */
 function alerts() {
   if (!ME) return []; const a = []; const L = visibleLeads(); const now = Date.now();
-  L.filter(l => l.dupOf).forEach(l => a.push(['🧬', `Duplicate: ${l.name} (${l.id}) matches ${l.dupOf}`, `openLead('${l.id}')`]));
-  L.filter(l => l.stage === 'New' && now - l.createdAt > 2 * H).slice(0, 6).forEach(l => a.push(['⏳', `${l.name} untouched for ${ago(l.createdAt).replace(' ago', '')}`, `openLead('${l.id}')`]));
-  L.filter(l => l.followUp && l.followUp < now && OPEN_STAGES.includes(l.stage)).slice(0, 6).forEach(l => a.push(['🔴', `Overdue follow-up: ${l.name}`, `openLead('${l.id}')`]));
-  if (ME.role === 'admin') S.leads.filter(l => l.payment && l.payment.status === 'pending').forEach(l => a.push(['💰', `Confirm payment ${aed(l.payment.amount)} · ref ${l.payment.ref} · ${l.name}`, `openLead('${l.id}')`]));
+  L.filter(l => l.dupOf).forEach(l => a.push(['', `Duplicate: ${l.name} (${l.id}) matches ${l.dupOf}`, `openLead('${l.id}')`]));
+  L.filter(l => l.stage === 'New' && now - l.createdAt > 2 * H).slice(0, 6).forEach(l => a.push(['', `${l.name} untouched for ${ago(l.createdAt).replace(' ago', '')}`, `openLead('${l.id}')`]));
+  L.filter(l => l.followUp && l.followUp < now && OPEN_STAGES.includes(l.stage)).slice(0, 6).forEach(l => a.push(['', `Overdue follow-up: ${l.name}`, `openLead('${l.id}')`]));
+  if (ME.role === 'admin') S.leads.filter(l => l.payment && l.payment.status === 'pending').forEach(l => a.push(['', `Confirm payment ${aed(l.payment.amount)} · ref ${l.payment.ref} · ${l.name}`, `openLead('${l.id}')`]));
   L.filter(l => unread(l)).slice(0, 5).forEach(l => a.push(['💬', `Unread WhatsApp from ${l.name}`, `openChat('${l.id}')`]));
-  if (ME.role !== 'sales') S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < now + 60 * D).forEach(c => a.push(['🔁', `Licence renewal: ${c.company} (${Math.round((c.licenceExpiry - now) / D)}d)`, `openCase('${c.id}')`]));
+  if (ME.role !== 'sales') S.cases.filter(c => c.licenceExpiry && c.licenceExpiry < now + 60 * D).forEach(c => a.push(['', `Licence renewal: ${c.company} (${Math.round((c.licenceExpiry - now) / D)}d)`, `openCase('${c.id}')`]));
   return a;
 }
 function modal(h) { $('modalBody').innerHTML = h; $('modal').classList.add('open'); }
@@ -857,27 +885,27 @@ function acctChecks(c) {
 const acctComplete = c => acctChecks(c).every(x => x[0]);
 function setOps(id, i) {
   const c = S.cases.find(x => x.id === id); const l = S.leads.find(x => x.id === c.leadId);
-  if (i > 1 && DOCS.some(d => !c.docs[d])) return toast('📄 Complete all documents before moving past Documents Collected');
+  if (i > 1 && DOCS.some(d => !c.docs[d])) return toast('Complete all documents before moving past Documents Collected');
   if (i >= 4 && !c.licenceNo && i > OPS_STAGES.indexOf(c.stage)) { c.licenceNo = zoneOf(c.zone).name.split(' ')[0].toUpperCase() + '-' + Math.floor(40000 + Math.random() * 9999); c.licenceExpiry = Date.now() + 365 * D; }
   const n = +c.visas || 0;
-  if (i >= 6) for (let k = c.visaHolders.length; k < n; k++) c.visaHolders.push({ name: k === 0 && l ? l.name : (l ? l.name.split(' ')[0] : 'Client') + ' – Employee ' + k, status: 'In process', expiry: null });
+  if (i >= 6) for (let k = c.visaHolders.length; k < n; k++) c.visaHolders.push({ name: k === 0 && l ? l.name : (l ? l.name.split(' ')[0] : 'Client') + ' - Employee ' + k, status: 'In process', expiry: null });
   if (i >= 7) c.visaHolders.forEach(v => { v.status = 'Stamped'; v.expiry = v.expiry || Date.now() + 730 * D; });
-  if (i === 8 && !acctComplete(c)) return modal(`<h2>Complete these before Setup Completed</h2><ul class="crit">${acctChecks(c).map(x => `<li class="${x[0] ? 'ok' : ''}">${x[0] ? '✅' : '⭕'} ${esc(x[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+  if (i === 8 && !acctComplete(c)) return modal(`<h2>Complete these before Setup Completed</h2><ul class="crit">${acctChecks(c).map(x => `<li class="${x[0] ? 'ok' : ''}">${x[0] ? '✓' : '○'} ${esc(x[1])}</li>`).join('')}</ul><div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
   const wasDone = acctComplete(c) && c.stage === 'Setup Completed';
   c.log.push({ at: Date.now(), by: ME.id, text: `Stage → ${OPS_STAGES[i]}` }); c.stage = OPS_STAGES[i]; save(); render();
-  if (i === 8 && !wasDone) { notify('u1', `✅ ${c.company} setup complete — moved to Accounts`, 'case:' + c.id); if (l) notify(l.owner, `🎉 Your client ${l.name} (${c.company}) setup is complete`, 'case:' + c.id); }
-  toast(i === 4 ? '🏛 Trade licence issued' : i === 8 ? '🎉 Setup completed — client moved to Accounts' : 'Stage → ' + OPS_STAGES[i]);
+  if (i === 8 && !wasDone) { notify('u1', `✓ ${c.company} setup complete - moved to Accounts`, 'case:' + c.id); if (l) notify(l.owner, `Your client ${l.name} (${c.company}) setup is complete`, 'case:' + c.id); }
+  toast(i === 4 ? 'Trade licence issued' : i === 8 ? 'Setup completed - client moved to Accounts' : 'Stage → ' + OPS_STAGES[i]);
 }
 function toggleVisa(id, k) { const c = S.cases.find(x => x.id === id); const v = c.visaHolders[k]; v.status = v.status === 'Stamped' ? 'In process' : 'Stamped'; if (v.status === 'Stamped') v.expiry = v.expiry || Date.now() + 730 * D; c.log.push({ at: Date.now(), by: ME.id, text: `Visa ${v.name} → ${v.status}` }); save(); render(); }
 function caseRow(c, mode) {
   const l = S.leads.find(x => x.id === c.leadId) || {}; const i = OPS_STAGES.indexOf(c.stage); const vis = +c.visas || 0; const st = c.visaHolders.filter(v => v.status === 'Stamped').length; const dn = DOCS.filter(d => c.docs[d]).length;
   return `<tr class="click" onclick="openCase('${c.id}')"><td><b>${esc(c.company)}</b><span class="sub">${c.id} · ${esc(zoneOf(c.zone).name)}</span></td><td>${esc(l.name || '')}<span class="sub">${esc(l.phone || '')}</span></td>
-  ${mode === 'cust' ? `<td>${l.payment ? aed(l.payment.amount) + `<span class="sub">ref ${esc(l.payment.ref)}</span>` : '—'}</td><td>${pill(c.stage, i >= 4 ? 'p-qualified' : 'p-contacted')}<div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></td><td>${dn === DOCS.length ? '✅' : '📄'} ${dn}/${DOCS.length}</td><td>${vis ? (st >= vis ? '✅ ' : '') + st + '/' + vis : '—'}</td><td class="small muted">${ago(c.startedAt)}</td>`
-  : `<td class="mono">${esc(c.licenceNo)}</td><td>${c.licenceExpiry ? expiryPill(c.licenceExpiry) : '—'}</td><td>✅ ${st}/${vis}</td><td>✅ ${dn}/${DOCS.length}</td><td>${l.payment ? aed(l.payment.amount) : '—'}</td>`}<td>${av(c.owner, 24)}</td></tr>`;
+  ${mode === 'cust' ? `<td>${l.payment ? aed(l.payment.amount) + `<span class="sub">ref ${esc(l.payment.ref)}</span>` : '-'}</td><td>${pill(c.stage, i >= 4 ? 'p-qualified' : 'p-contacted')}<div class="prog"><i style="width:${(i + 1) / OPS_STAGES.length * 100}%"></i></div></td><td>${dn === DOCS.length ? '✓' : ''} ${dn}/${DOCS.length}</td><td>${vis ? (st >= vis ? '✓ ' : '') + st + '/' + vis : '-'}</td><td class="small muted">${ago(c.startedAt)}</td>`
+  : `<td class="mono">${esc(c.licenceNo)}</td><td>${c.licenceExpiry ? expiryPill(c.licenceExpiry) : '-'}</td><td>✓ ${st}/${vis}</td><td>✓ ${dn}/${DOCS.length}</td><td>${l.payment ? aed(l.payment.amount) : '-'}</td>`}<td>${av(c.owner, 24)}</td></tr>`;
 }
 function vCustomers() {
   const cs = visibleCases().filter(c => !acctComplete(c) || c.stage !== 'Setup Completed').sort((a, b) => b.startedAt - a.startedAt);
-  return `<div class="card" style="margin-bottom:14px"><div class="card-b small">🏢 <b>Customers</b> = qualified leads whose payment is <b>confirmed by Accounts</b>. From here the <b>Operations team</b> handles licence, documents and visas. When licence + all visas + all documents are complete and setup is marked completed, the client moves to <b>Accounts</b>. Sales staff cannot see this module.</div></div>
+  return `<div class="card" style="margin-bottom:14px"><div class="card-b small"><b>Customers</b> = qualified leads whose payment is <b>confirmed by Accounts</b>. From here the <b>Operations team</b> handles licence, documents and visas. When licence + all visas + all documents are complete and setup is marked completed, the client moves to <b>Accounts</b>. Sales staff cannot see this module.</div></div>
   <div class="toolbar">${msel('ops', 'stage', OPS_STAGES, 'Ops stages')}${msel('ops', 'owner', TEAM.filter(t => t.role === 'ops').map(t => [t.id, t.name]), 'Ops owners')}${anyF(opsFilter) ? `<button class="btn btn-sm" onclick="opsFilter={stage:[],owner:[]};render()">Clear filters</button>` : ''}</div>
   <div class="card tbl-wrap"><div class="card-h"><h2>Customers in progress</h2><span class="small muted">${cs.length} paid clients</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Payment</th><th>Ops stage</th><th>Documents</th><th>Visas stamped</th><th>Since</th><th>Ops</th></tr></thead><tbody>
   ${cs.map(c => caseRow(c, 'cust')).join('') || '<tr><td colspan="8"><div class="empty">No customers in progress</div></td></tr>'}</tbody></table></div>`;
@@ -885,7 +913,7 @@ function vCustomers() {
 function vAccounts() {
   const cs = S.cases.filter(c => acctComplete(c) && c.stage === 'Setup Completed');
   const near = S.cases.filter(c => !(acctComplete(c) && c.stage === 'Setup Completed') && OPS_STAGES.indexOf(c.stage) >= 6).length;
-  return `<div class="card" style="margin-bottom:14px"><div class="card-b small">✅ <b>Accounts</b> = clients who have <b>paid</b>, have their <b>trade licence</b>, <b>all visas stamped</b> and <b>all documents complete</b>. Use it for renewals, VAT / Corporate Tax and upsell. ${near ? `<b>${near}</b> more client(s) are close (visa stage).` : ''}</div></div>
+  return `<div class="card" style="margin-bottom:14px"><div class="card-b small">✓ <b>Accounts</b> = clients who have <b>paid</b>, have their <b>trade licence</b>, <b>all visas stamped</b> and <b>all documents complete</b>. Use it for renewals, VAT / Corporate Tax and upsell. ${near ? `<b>${near}</b> more client(s) are close (visa stage).` : ''}</div></div>
   <div class="card tbl-wrap"><div class="card-h"><h2>Completed accounts</h2><span class="small muted">${cs.length} clients</span></div><table class="tbl"><thead><tr><th>Company</th><th>Client</th><th>Licence no.</th><th>Licence expiry</th><th>Visas</th><th>Documents</th><th>Paid</th><th>Ops</th></tr></thead><tbody>
   ${cs.map(c => caseRow(c, 'acct')).join('') || '<tr><td colspan="8"><div class="empty">No completed accounts yet</div></td></tr>'}</tbody></table></div>`;
 }
@@ -893,27 +921,27 @@ function vAccounts() {
 /* ---------------- notifications ---------------- */
 function notify(to, text, link) {
   S.notifs = S.notifs || []; S.notifs.unshift({ id: Math.random().toString(36).slice(2), to, text, link, at: Date.now(), read: false }); S.notifs = S.notifs.slice(0, 300);
-  if (ME && to === ME.id) { setTimeout(() => toast('🔔 ' + text), 400); if (window.Notification && Notification.permission === 'granted') { try { new Notification('QPH CRM', { body: text, icon: 'logo.png' }); } catch (e) { } } }
+  if (ME && to === ME.id) { setTimeout(() => toast('' + text), 400); if (window.Notification && Notification.permission === 'granted') { try { new Notification('QPH CRM', { body: text, icon: 'logo.png' }); } catch (e) { } } }
 }
 const myNotifs = () => (S.notifs || []).filter(n => ME && n.to === ME.id);
 function openNotif(id) { const n = S.notifs.find(x => x.id === id); n.read = true; save(); closeModal(); if (!n.link) return render(); if (n.link.startsWith('case:')) { render(); openCase(n.link.slice(5)); } else openLead(n.link); }
 function markAllRead() { myNotifs().forEach(n => n.read = true); save(); closeModal(); render(); }
-function enableDesktop() { if (!window.Notification) return toast('This browser does not support notifications'); Notification.requestPermission().then(p => toast(p === 'granted' ? '✅ Desktop notifications on' : 'Notifications blocked in browser settings')); }
+function enableDesktop() { if (!window.Notification) return toast('This browser does not support notifications'); Notification.requestPermission().then(p => toast(p === 'granted' ? '✓ Desktop notifications on' : 'Notifications blocked in browser settings')); }
 function alertsModal() {
   const N = myNotifs(); const a = alerts();
-  modal(`<h2>🔔 Notifications · ${esc(ME.name)}</h2><div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap"><button class="btn btn-sm" onclick="markAllRead()">Mark all read</button><button class="btn btn-sm" onclick="enableDesktop()">🖥 Enable desktop notifications</button></div>
-  <ul class="alerts">${N.slice(0, 25).map(n => `<li onclick="openNotif('${n.id}')" style="${n.read ? 'color:var(--muted)' : 'font-weight:600;background:#FFF8F2'}"><span>${n.read ? '○' : '🟠'}</span><span style="flex:1">${esc(n.text)}</span><span class="small muted" style="white-space:nowrap">${ago(n.at)}</span></li>`).join('') || '<li>No notifications yet</li>'}</ul>
-  ${a.length ? `<h3 style="font-size:14px;margin-top:18px">⚠️ Needs attention</h3><ul class="alerts">${a.map(([i, t, fn]) => `<li onclick="closeModal();${fn}"><span>${i}</span><span>${esc(t)}</span></li>`).join('')}</ul>` : ''}
+  modal(`<h2>Notifications · ${esc(ME.name)}</h2><div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap"><button class="btn btn-sm" onclick="markAllRead()">Mark all read</button><button class="btn btn-sm" onclick="enableDesktop()">Enable desktop notifications</button></div>
+  <ul class="alerts">${N.slice(0, 25).map(n => `<li onclick="openNotif('${n.id}')" style="${n.read ? 'color:var(--muted)' : 'font-weight:600;background:#FFF8F2'}"><span>${n.read ? '○' : '●'}</span><span style="flex:1">${esc(n.text)}</span><span class="small muted" style="white-space:nowrap">${ago(n.at)}</span></li>`).join('') || '<li>No notifications yet</li>'}</ul>
+  ${a.length ? `<h3 style="font-size:14px;margin-top:18px">Needs attention</h3><ul class="alerts">${a.map(([i, t, fn]) => `<li onclick="closeModal();${fn}"><span>${i}</span><span>${esc(t)}</span></li>`).join('')}</ul>` : ''}
   <div class="modal-f"><button class="btn" onclick="closeModal()">Close</button></div>`);
 }
 
 /* ---------------- email ---------------- */
 const EMAIL_TPL = [
   { id: 'welcome', name: 'Welcome', subject: 'Welcome to Quick Path Horizon, {name}', body: 'Hi {name},\n\nThank you for your enquiry about setting up your business in the UAE. I am {agent}, your dedicated consultant.\n\nCould you share a good time for a quick call? I will walk you through the best free zone / mainland options for your activity.\n\nBest regards,\n{agent}\nQuick Path Horizon · 0581464678' },
-  { id: 'proposal', name: 'Proposal', subject: 'Your UAE business setup proposal – {name}', body: 'Hi {name},\n\nPlease find attached your customised business setup proposal. The quote is valid for 7 days.\n\nLet me know if you have any questions.\n\nBest regards,\n{agent}\nQuick Path Horizon' },
+  { id: 'proposal', name: 'Proposal', subject: 'Your UAE business setup proposal - {name}', body: 'Hi {name},\n\nPlease find attached your customised business setup proposal. The quote is valid for 7 days.\n\nLet me know if you have any questions.\n\nBest regards,\n{agent}\nQuick Path Horizon' },
   { id: 'payment', name: 'Payment link', subject: 'Payment link to start your company setup', body: 'Hi {name},\n\nHere is your secure payment link: {paylink}\n\nOnce payment is confirmed, our operations team starts your application the same day.\n\nBest regards,\n{agent}' },
   { id: 'docs', name: 'Documents required', subject: 'Documents needed for your application', body: 'Hi {name},\n\nTo start your application please send:\n• Passport copy\n• Photo with white background\n• Current visa / entry stamp\n• 3 trade name options\n\nBest regards,\n{agent}' },
-  { id: 'meeting', name: 'Meeting invite', subject: 'Your meeting with Quick Path Horizon – {date}', body: 'Hi {name},\n\nYour consultation with Quick Path Horizon is confirmed.\n\nDate & time: {date}\nMeeting: {meetlink}\n\nA calendar invite is attached. If you need to reschedule, just reply to this email.\n\nBest regards,\n{agent}\nQuick Path Horizon · 0581464678' },
+  { id: 'meeting', name: 'Meeting invite', subject: 'Your meeting with Quick Path Horizon - {date}', body: 'Hi {name},\n\nYour consultation with Quick Path Horizon is confirmed.\n\nDate & time: {date}\nMeeting: {meetlink}\n\nA calendar invite is attached. If you need to reschedule, just reply to this email.\n\nBest regards,\n{agent}\nQuick Path Horizon · 0581464678' },
   { id: 'followup', name: 'Follow-up', subject: 'Following up on your business setup enquiry', body: 'Hi {name},\n\nJust following up on our conversation. Would you like me to share the 3 most cost-effective options for your business activity?\n\nBest regards,\n{agent}' },
 ];
 function fillTpl(t, l) { const a = l.appt || {}; t = t.replace(/\{date\}/g, a.at ? fmtDate(a.at) : '').replace(/\{meetlink\}/g, a.link || a.place || ''); return t.replace(/\{name\}/g, l.name.split(' ')[0]).replace(/\{agent\}/g, user(l.owner).name).replace(/\{paylink\}/g, (l.payLink && l.payLink.url) || 'https://pay.quickpathhorizon.com/' + l.id); }
@@ -931,17 +959,17 @@ function sendEmail(id) {
   const att = $('emAtt') && $('emAtt').checked ? l.proposals[l.proposals.length - 1].pdf : '';
   l.emails = l.emails || []; l.emails.push({ at: Date.now(), to: $('emTo').value, subject: sub, by: ME.id, att });
   l.contact.email = true; log(l, `Email sent: "${sub}"${att ? ' + ' + att : ''} → ${$('emTo').value}`); save(); closeModal(); render();
-  toast(S.email.connected ? `📧 Email sent to ${l.email}` : `📧 Email logged (demo — connect email in Settings to deliver)`);
+  toast(S.email.connected ? `Email sent to ${l.email}` : `Email logged (demo - connect email in Settings to deliver)`);
 }
 const EMAIL_PROVIDERS = { 'Gmail / Google Workspace': ['smtp.gmail.com', 587], 'Microsoft 365 / Outlook': ['smtp.office365.com', 587], 'Zoho Mail': ['smtp.zoho.com', 587], 'Custom SMTP': ['', 587] };
 function emailSettings() {
   const e = S.email; const f = (k, label, type = 'text') => `<div><label>${label}</label><input type="${type}" value="${esc(e[k] ?? '')}" onchange="S.email.${k}=this.value;S.email.connected=false;save();render()"></div>`;
   const tg = (k, label) => `<label class="opt ${e[k] ? 'on' : ''}"><input type="checkbox" ${e[k] ? 'checked' : ''} onchange="S.email.${k}=this.checked;save();render()"> ${label}</label>`;
-  return `<div class="grid2"><div class="card"><div class="card-h"><h2>📧 Email account</h2>${e.connected ? pill('Connected (demo)', 'p-closed-won') : pill('Not connected', 'p-follow-up')}</div><div class="card-b"><div class="form" style="margin:0">
+  return `<div class="grid2"><div class="card"><div class="card-h"><h2>Email account</h2>${e.connected ? pill('Connected (demo)', 'p-closed-won') : pill('Not connected', 'p-follow-up')}</div><div class="card-b"><div class="form" style="margin:0">
     <div class="full"><label>Provider</label><select onchange="S.email.provider=this.value;S.email.host=EMAIL_PROVIDERS[this.value][0];S.email.port=EMAIL_PROVIDERS[this.value][1];S.email.connected=false;save();render()">${Object.keys(EMAIL_PROVIDERS).map(p => `<option ${e.provider === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
     ${f('fromName', 'From name')}${f('fromEmail', 'From email', 'email')}${f('host', 'SMTP host')}${f('port', 'Port', 'number')}${f('user', 'Username', 'email')}
     <div><label>App password</label><input type="password" placeholder="Not stored in demo" autocomplete="off"></div>${f('replyTo', 'Reply-to (optional)', 'email')}
-  </div><button class="btn btn-primary" style="margin-top:14px" onclick="toast('Testing connection…');setTimeout(()=>{S.email.connected=true;save();render();toast('✅ Connected (demo — real sending needs the live server)')},900)">Save & test connection</button>
+  </div><button class="btn btn-primary" style="margin-top:14px" onclick="toast('Testing connection…');setTimeout(()=>{S.email.connected=true;save();render();toast('✓ Connected (demo - real sending needs the live server)')},900)">Save & test connection</button>
   <p class="small muted">Live version sends through your mailbox (Gmail / Outlook app password or SMTP), so customers receive emails from ${esc(e.fromEmail)} and replies land in your inbox.</p></div></div>
   <div class="card"><div class="card-h"><h2>Automatic emails</h2></div><div class="card-b" style="display:grid;gap:8px">
     ${tg('autoWelcome', 'Send <b>Welcome</b> email automatically to every new lead with an email')}${tg('autoProposal', 'Email the proposal PDF to the customer when stage → Proposal Sent')}${tg('autoPayment', 'Email the payment link when stage → Payment Link Sent')}${tg('staffAlerts', 'Email the assigned salesperson when a new lead is assigned')}
@@ -951,13 +979,13 @@ function emailSettings() {
 function assignSettings() {
   const sales = TEAM.filter(t => t.role === 'sales'); const mem = S.rrMembers; const nextU = mem.length ? mem[S.rr % mem.length] : null;
   const today = id => S.leads.filter(l => l.owner === id && new Date(l.createdAt).toDateString() === new Date().toDateString()).length;
-  return `<div class="grid2"><div class="card"><div class="card-h"><h2>🔄 Round robin — sales</h2>${nextU ? pill('Next lead → ' + user(nextU).name, 'p-qualified') : pill('Nobody active', 'p-lost')}</div><div class="card-b">
+  return `<div class="grid2"><div class="card"><div class="card-h"><h2>Round robin - sales</h2>${nextU ? pill('Next lead → ' + user(nextU).name, 'p-qualified') : pill('Nobody active', 'p-lost')}</div><div class="card-b">
     <p class="small muted" style="margin-top:0">Every new lead (Meta, Google, Website, WhatsApp) goes to the next active salesperson in turn. Duplicates go to the original owner.</p>
-    ${sales.map(t => `<label class="opt ${mem.includes(t.id) ? 'on' : ''}" style="margin-bottom:8px"><input type="checkbox" ${mem.includes(t.id) ? 'checked' : ''} onchange="S.rrMembers=this.checked?[...S.rrMembers,'${t.id}']:S.rrMembers.filter(x=>x!=='${t.id}');save();render()"> ${av(t.id, 24)} <b>${esc(t.name)}</b> — receives new leads <em>${today(t.id)} today · ${S.leads.filter(l => l.owner === t.id && l.stage === 'New').length} new open</em></label>`).join('')}
-    <p class="small muted">Untick someone on leave — their share goes to the others automatically.</p></div></div>
-  <div class="card"><div class="card-h"><h2>🔔 Who gets notified</h2></div><div class="card-b"><ul class="crit">
-    <li class="ok">✅ New lead → assigned salesperson + Admin</li><li class="ok">✅ Duplicate lead → original owner + Admin</li><li class="ok">✅ Payment sent for confirmation → Accounts (Admin)</li><li class="ok">✅ Payment confirmed → salesperson; new customer case → Operations (round robin Sara / Imran)</li><li class="ok">✅ Setup completed → Admin + salesperson</li>
-  </ul><p class="small muted">Notifications show in the 🔔 bell for each user, as a pop-up, and as desktop notifications (bell → Enable). ${S.email.staffAlerts ? 'Staff email alerts are ON.' : 'Staff email alerts are OFF (Settings → Email).'}</p></div></div></div>`;
+    ${sales.map(t => `<label class="opt ${mem.includes(t.id) ? 'on' : ''}" style="margin-bottom:8px"><input type="checkbox" ${mem.includes(t.id) ? 'checked' : ''} onchange="S.rrMembers=this.checked?[...S.rrMembers,'${t.id}']:S.rrMembers.filter(x=>x!=='${t.id}');save();render()"> ${av(t.id, 24)} <b>${esc(t.name)}</b> - receives new leads <em>${today(t.id)} today · ${S.leads.filter(l => l.owner === t.id && l.stage === 'New').length} new open</em></label>`).join('')}
+    <p class="small muted">Untick someone on leave - their share goes to the others automatically.</p></div></div>
+  <div class="card"><div class="card-h"><h2>Who gets notified</h2></div><div class="card-b"><ul class="crit">
+    <li class="ok">✓ New lead → assigned salesperson + Admin</li><li class="ok">✓ Duplicate lead → original owner + Admin</li><li class="ok">✓ Payment sent for confirmation → Accounts (Admin)</li><li class="ok">✓ Payment confirmed → salesperson; new customer case → Operations (round robin Sara / Imran)</li><li class="ok">✓ Setup completed → Admin + salesperson</li>
+  </ul><p class="small muted">Notifications show in the bell for each user, as a pop-up, and as desktop notifications (bell → Enable). ${S.email.staffAlerts ? 'Staff email alerts are ON.' : 'Staff email alerts are OFF (Settings → Email).'}</p></div></div></div>`;
 }
 
 /* ---------------- WhatsApp tags ---------------- */
@@ -970,7 +998,7 @@ function waTag(id, t) {
   if (on) return;
   if (t === 'Junk' && l.stage !== 'Junk') reasonModal(id, 'Junk');
   else if (t === 'Qualified' && PIPE.indexOf(l.stage) < PIPE.indexOf('Qualified')) tryStage(id, 'Qualified');
-  else if (t === 'Follow-up' && !l.followUp) toast('Tagged Follow-up — set the follow-up date on the lead');
+  else if (t === 'Follow-up' && !l.followUp) toast('Tagged Follow-up - set the follow-up date on the lead');
   else toast('Tag added: ' + t);
 }
 
@@ -978,7 +1006,7 @@ function waTag(id, t) {
 let VM = (() => { try { return JSON.parse(localStorage.getItem('qph_vm')) || {}; } catch (e) { return {}; } })();
 const vmOf = r => VM[r] || 'list';
 function setVM(r, m) { VM[r] = m; localStorage.setItem('qph_vm', JSON.stringify(VM)); render(); }
-function vmToggle(r, modes = ['list', 'grid']) { const lbl = { list: '☰ List', grid: '▦ Grid', calendar: '🗓 Calendar' }; return `<div class="seg">${modes.map(m => `<button class="${vmOf(r) === m ? 'on' : ''}" onclick="setVM('${r}','${m}')">${lbl[m]}</button>`).join('')}</div>`; }
+function vmToggle(r, modes = ['list', 'grid']) { const lbl = { list: 'List', grid: '▦ Grid', calendar: '🗓 Calendar' }; return `<div class="seg">${modes.map(m => `<button class="${vmOf(r) === m ? 'on' : ''}" onclick="setVM('${r}','${m}')">${lbl[m]}</button>`).join('')}</div>`; }
 function leadCard(l, extra) {
   return `<div class="lcard" onclick="openLead('${l.id}')">
     <div class="lc-top">${av(l.owner, 30)}<div style="min-width:0;flex:1"><b>${esc(l.name)}</b><div class="sub">${esc(l.phone)}</div></div>${pill(l.stage)}</div>
@@ -996,7 +1024,7 @@ function vFollowups() {
   const grp = [['Overdue', 'red', L.filter(l => l.followUp < now)], ['Today', 'amber', L.filter(l => l.followUp >= now && l.followUp <= eod)], ['Upcoming', 'blue', L.filter(l => l.followUp > eod)]];
   grp.forEach(g => g[2].sort((a, b) => a.followUp - b.followUp));
   const head = `<div class="toolbar">${leadFilterBar({ stages: OPEN_STAGES })}<span class="count">${L.length} follow-ups</span>${vmToggle('followups')}</div>`;
-  if (vmOf('followups') === 'grid') return head + `<div class="kgrid">${grp.map(([t, c, arr]) => `<div class="kcol2"><h3><span class="dot d-${c}"></span>${t}<span class="muted">${arr.length}</span></h3>${arr.map(l => leadCard(l, `⏰ ${fmtDate(l.followUp)}`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('')}</div>`;
+  if (vmOf('followups') === 'grid') return head + `<div class="kgrid">${grp.map(([t, c, arr]) => `<div class="kcol2"><h3><span class="dot d-${c}"></span>${t}<span class="muted">${arr.length}</span></h3>${arr.map(l => leadCard(l, `${fmtDate(l.followUp)}`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('')}</div>`;
   return head + grp.map(([t, c, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2><span class="dot d-${c}"></span>${t}</h2><span class="muted small">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 26)}<div style="min-width:0"><b>${esc(l.name)}</b><div class="small muted">${esc(l.phone)} · ${esc(l.stage)}${l.notes.length ? ' · ' + esc(l.notes[l.notes.length - 1].text.slice(0, 70)) : ''}</div></div><div class="r">${fu(l.followUp)}<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-sm btn-wa" onclick="event.stopPropagation();openChat('${l.id}')"><svg class="wa-ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3.9 2.5c.1.2 1.6 2.5 4 3.5 1.5.6 2.1.7 2.8.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.2z"/></svg> WhatsApp</button><a class="btn btn-sm" href="tel:${esc(l.phone)}" onclick="event.stopPropagation()">Call</a></div></div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
 }
 
@@ -1012,10 +1040,10 @@ function genLink(type) {
 }
 function gcalLink(l) {
   const a = l.appt; const f = d => new Date(d).toISOString().replace(/[-:]|\.\d{3}/g, ''); const end = a.at + (a.duration || 30) * 60e3;
-  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('QPH meeting – ' + l.name) + '&dates=' + f(a.at) + '/' + f(end) + '&details=' + encodeURIComponent((a.link ? 'Join: ' + a.link + '\n' : '') + (a.agenda || 'Business setup consultation')) + '&location=' + encodeURIComponent(a.link || a.place || '');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('QPH meeting - ' + l.name) + '&dates=' + f(a.at) + '/' + f(end) + '&details=' + encodeURIComponent((a.link ? 'Join: ' + a.link + '\n' : '') + (a.agenda || 'Business setup consultation')) + '&location=' + encodeURIComponent(a.link || a.place || '');
 }
 function apptMsg(l) { const a = l.appt; const t = typeOf(a); return `Hi ${l.name.split(' ')[0]}, your meeting with Quick Path Horizon is confirmed for ${fmtDate(a.at)} (${a.duration || 30} min).\n${a.link ? t[1] + ' link: ' + a.link : 'Place: ' + (a.place || '')}\nSee you then!`; }
-function apptCard(l) { const a = l.appt; const t = typeOf(a); return `<div class="ap-line">🕑 <b>${fmtDate(a.at)}</b> · ${t[1]}${a.link ? ` · <a href="${esc(a.link)}" target="_blank" onclick="event.stopPropagation()">Join link</a>` : ''}</div>`; }
+function apptCard(l) { const a = l.appt; const t = typeOf(a); return `<div class="ap-line"><b>${fmtDate(a.at)}</b> · ${t[1]}${a.link ? ` · <a href="${esc(a.link)}" target="_blank" onclick="event.stopPropagation()">Join link</a>` : ''}</div>`; }
 function apptModal(leadId, dayTs) {
   const L = visibleLeads().filter(l => !['Lost', 'Junk'].includes(l.stage));
   const l = leadId ? S.leads.find(x => x.id === leadId) : null; const a = (l && l.appt) || {};
@@ -1060,9 +1088,9 @@ function vAppointments() {
     const cells = []; for (let k = 0; k < 42; k++) { const d = new Date(y, m, 1 - off + k); cells.push(d); }
     const evs = d => L.filter(l => new Date(l.appt.at).toDateString() === d.toDateString());
     return head + `<div class="card"><div class="card-h"><div style="display:flex;gap:8px;align-items:center"><button class="btn btn-sm" onclick="calMonth=new Date(${y},${m - 1},1);render()">‹</button><h2 style="min-width:150px;text-align:center">${start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</h2><button class="btn btn-sm" onclick="calMonth=new Date(${y},${m + 1},1);render()">›</button><button class="btn btn-sm" onclick="calMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);render()">Today</button></div><span class="small muted">Click a day to book · click a meeting to edit</span></div>
-    <div class="cal">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="dh">${d}</div>`).join('')}${cells.slice(0, Math.ceil((off + days) / 7) * 7).map(d => { const e = evs(d); const today = d.toDateString() === new Date().toDateString(); return `<div class="dc ${d.getMonth() !== m ? 'other' : ''} ${today ? 'today' : ''}" onclick="apptModal(null,${d.getTime()})"><span class="num">${d.getDate()}</span>${e.map(l => `<div class="ev" onclick="event.stopPropagation();apptModal('${l.id}')" title="${esc(l.name)} · ${typeOf(l.appt)[1]}">${new Date(l.appt.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} ${esc(l.name.split(' ')[0])}${l.appt.link ? ' 🎥' : ''}</div>`).join('')}</div>`; }).join('')}</div></div>`;
+    <div class="cal">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="dh">${d}</div>`).join('')}${cells.slice(0, Math.ceil((off + days) / 7) * 7).map(d => { const e = evs(d); const today = d.toDateString() === new Date().toDateString(); return `<div class="dc ${d.getMonth() !== m ? 'other' : ''} ${today ? 'today' : ''}" onclick="apptModal(null,${d.getTime()})"><span class="num">${d.getDate()}</span>${e.map(l => `<div class="ev" onclick="event.stopPropagation();apptModal('${l.id}')" title="${esc(l.name)} · ${typeOf(l.appt)[1]}">${new Date(l.appt.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} ${esc(l.name.split(' ')[0])}${l.appt.link ? ' ' : ''}</div>`).join('')}</div>`; }).join('')}</div></div>`;
   }
-  const groups = [['Today', L.filter(l => l.appt.at >= sod && l.appt.at <= eod)], ['Upcoming', L.filter(l => l.appt.at > eod)], ['Past — update the outcome', L.filter(l => l.appt.at < sod && l.stage === 'Appointment Booked')]];
+  const groups = [['Today', L.filter(l => l.appt.at >= sod && l.appt.at <= eod)], ['Upcoming', L.filter(l => l.appt.at > eod)], ['Past - update the outcome', L.filter(l => l.appt.at < sod && l.stage === 'Appointment Booked')]];
   if (mode === 'grid') return head + groups.map(([t, arr]) => `<h3 class="sec-h">${t} <span class="muted">${arr.length}</span></h3><div class="cards">${arr.map(l => leadCard(l, apptCard(l) + `<div class="lc-act">${actions(l)}</div>`)).join('') || '<div class="empty small">Nothing here</div>'}</div>`).join('');
   return head + groups.map(([t, arr]) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>${t}</h2><span class="small muted">${arr.length}</span></div><div class="card-b">${arr.length ? `<ul class="list-plain appt">${arr.map(l => `<li onclick="openLead('${l.id}')">${av(l.owner, 30)}<div style="flex:1;min-width:0"><b>${esc(l.name)}</b> <span class="small muted">· ${esc(l.stage)}</span><div class="small muted">${fmtDate(l.appt.at)} · ${l.appt.duration || 30} min · ${typeOf(l.appt)[1]}${l.appt.link ? ` · <a href="${esc(l.appt.link)}" target="_blank" onclick="event.stopPropagation()">${esc(l.appt.link)}</a>` : ''}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap">${actions(l)}</div></li>`).join('')}</ul>` : '<div class="empty">Nothing here</div>'}</div></div>`).join('');
 }
@@ -1076,9 +1104,9 @@ function migrate() {
   S.leads.filter(l => l.payment && l.payment.status === 'confirmed').forEach(l => openCaseFor(l, true));
   if (!S.notifs.length) {
     const push = (to, text, link, at) => S.notifs.push({ id: Math.random().toString(36).slice(2), to, text, link, at, read: false });
-    [...S.leads].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).forEach(l => { push(l.owner, `🆕 New ${l.source} lead assigned to you: ${l.name}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : ''}`, l.id, l.createdAt); push('u1', `🆕 New ${l.source} lead ${l.name} → ${user(l.owner).name}`, l.id, l.createdAt); });
-    S.cases.slice(0, 5).forEach(c => push(c.owner, `🏢 New customer case ${c.id}: ${c.company}`, 'case:' + c.id, c.startedAt));
-    S.leads.filter(l => l.payment && l.payment.status === 'pending').forEach(l => push('u1', `💰 Confirm payment ${aed(l.payment.amount)} · ref ${l.payment.ref} · ${l.name}`, l.id, l.payment.sentAt));
+    [...S.leads].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).forEach(l => { push(l.owner, `New ${l.source} lead assigned to you: ${l.name}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + l.attr.campaign : ''}`, l.id, l.createdAt); push('u1', `New ${l.source} lead ${l.name} → ${user(l.owner).name}`, l.id, l.createdAt); });
+    S.cases.slice(0, 5).forEach(c => push(c.owner, `New customer case ${c.id}: ${c.company}`, 'case:' + c.id, c.startedAt));
+    S.leads.filter(l => l.payment && l.payment.status === 'pending').forEach(l => push('u1', `Confirm payment ${aed(l.payment.amount)} · ref ${l.payment.ref} · ${l.name}`, l.id, l.payment.sentAt));
     S.notifs.sort((a, b) => b.at - a.at);
   }
   save();

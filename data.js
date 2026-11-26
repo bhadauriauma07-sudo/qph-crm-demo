@@ -1,4 +1,4 @@
-/* QPH CRM demo — constants and seed data */
+/* QPH CRM demo - constants and seed data */
 const TEAM = [
   { id: 'u1', name: 'Faisal Rahman', role: 'admin', title: 'Admin · Manager & Accounts', color: '#1E3A5F' },
   { id: 'u2', name: 'Aisha Khan', role: 'sales', title: 'Sales Executive', color: '#486581' },
@@ -51,7 +51,7 @@ const DEFAULT_ADDONS = [
 const DEFAULT_SERVICE_FEE = 2500;
 
 const WA_TEMPLATES = [
-  { name: 'welcome', text: 'Hi {name}, thank you for contacting Quick Path Horizon! 👋 We help you set up your UAE company fast and fully compliant. When is a good time for a quick call?' },
+  { name: 'welcome', text: 'Hi {name}, thank you for contacting Quick Path Horizon! We help you set up your UAE company fast and fully compliant. When is a good time for a quick call?' },
   { name: 'follow_up', text: 'Hi {name}, just following up on your business setup enquiry. Would you like us to share the best free zone options and cost for your activity?' },
   { name: 'proposal', text: 'Hi {name}, please find your customised business setup proposal attached. The quote is valid for 7 days. Let me know if you have any questions!' },
   { name: 'payment', text: 'Hi {name}, here is your secure payment link to start your company setup. Once paid, our operations team will begin the application the same day.' },
@@ -60,14 +60,14 @@ const WA_TEMPLATES = [
 
 const CAMPAIGNS = {
   Meta: [
-    { campaign: 'QPH | Freezone Setup | Leads | Nov26', adsets: ['UAE Expats 25-45', 'India Investors – Mumbai/Delhi', 'Lookalike 1% – Customers'], ads: ['Video – 2 Visa Package', 'Carousel – Top 5 Freezones', 'Static – Licence from AED 5,750'], form: 'QPH Freezone Form v2' },
-    { campaign: 'QPH | Golden & Family Visa | Leads', adsets: ['UAE Residents – Families', 'Business Owners 30-55'], ads: ['Reel – Family Visa in 7 days', 'Static – Golden Visa Checklist'], form: 'QPH Visa Form' },
-    { campaign: 'QPH | Mainland Company | Conversions', adsets: ['Dubai Traders – Interests', 'Retargeting – Site 30d'], ads: ['Video – Mainland vs Freezone', 'Static – 100% Ownership'], form: 'Website (Pixel)' },
+    { campaign: 'QPH | Freezone Setup | Leads | Nov26', adsets: ['UAE Expats 25-45', 'India Investors - Mumbai/Delhi', 'Lookalike 1% - Customers'], ads: ['Video - 2 Visa Package', 'Carousel - Top 5 Freezones', 'Static - Licence from AED 5,750'], form: 'QPH Freezone Form v2' },
+    { campaign: 'QPH | Golden & Family Visa | Leads', adsets: ['UAE Residents - Families', 'Business Owners 30-55'], ads: ['Reel - Family Visa in 7 days', 'Static - Golden Visa Checklist'], form: 'QPH Visa Form' },
+    { campaign: 'QPH | Mainland Company | Conversions', adsets: ['Dubai Traders - Interests', 'Retargeting - Site 30d'], ads: ['Video - Mainland vs Freezone', 'Static - 100% Ownership'], form: 'Website (Pixel)' },
   ],
   Google: [
-    { campaign: 'QPH Search | Business Setup Dubai', adsets: ['Freezone Licence', 'Company Formation Cost'], ads: ['RSA – Freezone from AED 5,750', 'RSA – Setup in 3 Days'], terms: ['business setup in dubai', 'freezone license cost', 'company formation uae', 'cheapest freezone dubai'] },
-    { campaign: 'QPH Search | Mainland & PRO', adsets: ['Mainland Licence', 'PRO Services'], ads: ['RSA – Mainland Experts', 'RSA – PRO & Visa Services'], terms: ['mainland company setup dubai', 'pro services dubai', 'trade license renewal dubai'] },
-    { campaign: 'QPH PMax | Leads', adsets: ['Asset Group – Freezone'], ads: ['PMax – Asset Group 1'], terms: [''] },
+    { campaign: 'QPH Search | Business Setup Dubai', adsets: ['Freezone Licence', 'Company Formation Cost'], ads: ['RSA - Freezone from AED 5,750', 'RSA - Setup in 3 Days'], terms: ['business setup in dubai', 'freezone license cost', 'company formation uae', 'cheapest freezone dubai'] },
+    { campaign: 'QPH Search | Mainland & PRO', adsets: ['Mainland Licence', 'PRO Services'], ads: ['RSA - Mainland Experts', 'RSA - PRO & Visa Services'], terms: ['mainland company setup dubai', 'pro services dubai', 'trade license renewal dubai'] },
+    { campaign: 'QPH PMax | Leads', adsets: ['Asset Group - Freezone'], ads: ['PMax - Asset Group 1'], terms: [''] },
   ],
 };
 
@@ -137,7 +137,7 @@ function buildSeed() {
       lead.attr = { platform: 'Organic / Direct', campaign: '(none)', adset: '', ad: '', form: 'Contact Us form',
         utm: { utm_source: pick(['(direct)', 'chatgpt.com', 'bing']), utm_medium: pick(['organic', 'referral', '(none)']) }, clickId: '', landing: 'https://quickpathhorizon.com/contact-us/' };
     } else if (source === 'WhatsApp') {
-      lead.attr = { platform: 'WhatsApp +971 58 146 4678', campaign: pick(['Click-to-WhatsApp – Freezone', '(organic chat)']), adset: '', ad: '', form: '', utm: {}, clickId: '', landing: '' };
+      lead.attr = { platform: 'WhatsApp +971 58 146 4678', campaign: pick(['Click-to-WhatsApp - Freezone', '(organic chat)']), adset: '', ad: '', form: '', utm: {}, clickId: '', landing: '' };
     }
     if (['Follow-up', 'Not Contacted', 'Contacted', 'Appointment Booked', 'Qualified', 'Proposal Sent', 'Payment Link Sent'].includes(stage)) {
       const off = [-1.5 * D, -3 * H, 1 * H, 3 * H, 1 * D, 2 * D, 4 * D][i % 7];
@@ -180,7 +180,7 @@ function buildSeed() {
       cases.push({ id: 'C' + (3001 + cases.length), leadId: lead.id, company: first + ' ' + pick(['Trading', 'Consultancy', 'Technologies', 'Global', 'Ventures']) + ' ' + (zone.type === 'Mainland' ? 'LLC' : 'FZ-LLC'),
         stage: OPS_STAGES[opsStage], owner: ['u4', 'u5'][cases.length % 2], docs, zone: zone.id, visas: lead.req.visas, startedAt: created + 4 * D,
         licenceNo: opsStage >= 4 ? zone.name.split(' ')[0].toUpperCase() + '-' + (40000 + i * 37) : '', licenceExpiry: opsStage >= 4 ? exp : null,
-        visaHolders: opsStage >= 6 ? Array.from({ length: lead.req.visas }, (_, k) => ({ name: k ? first + ' – Employee ' + k : lead.name, status: opsStage >= 7 ? 'Stamped' : 'In process', expiry: opsStage >= 7 ? exp + 300 * D : null })) : [],
+        visaHolders: opsStage >= 6 ? Array.from({ length: lead.req.visas }, (_, k) => ({ name: k ? first + ' - Employee ' + k : lead.name, status: opsStage >= 7 ? 'Stamped' : 'In process', expiry: opsStage >= 7 ? exp + 300 * D : null })) : [],
         log: [{ at: created + 4 * D, by: 'system', text: 'Case opened after Closed Won' }] });
     }
     if (['WhatsApp', 'Meta', 'Google'].includes(source) && i % 3 === 0) {
@@ -194,17 +194,17 @@ function buildSeed() {
   }
 
   // Duplicates: same person enquiring again from another campaign
-  const dupPlan = [[2, 'Google', 'QPH Search | Business Setup Dubai', 'Freezone Licence', 'RSA – Freezone from AED 5,750'], [5, 'Meta', 'QPH | Golden & Family Visa | Leads', 'UAE Residents – Families', 'Reel – Family Visa in 7 days'], [11, 'Meta', 'QPH | Freezone Setup | Leads | Nov26', 'Lookalike 1% – Customers', 'Carousel – Top 5 Freezones'], [17, 'Website', '(none)', '', '']];
+  const dupPlan = [[2, 'Google', 'QPH Search | Business Setup Dubai', 'Freezone Licence', 'RSA - Freezone from AED 5,750'], [5, 'Meta', 'QPH | Golden & Family Visa | Leads', 'UAE Residents - Families', 'Reel - Family Visa in 7 days'], [11, 'Meta', 'QPH | Freezone Setup | Leads | Nov26', 'Lookalike 1% - Customers', 'Carousel - Top 5 Freezones'], [17, 'Website', '(none)', '', '']];
   dupPlan.forEach(([idx, src, camp, adset, ad], k) => {
     const o = leads[idx];
     const phoneVariant = k % 2 ? o.phone.replace('+971', '00971') : o.phone.replace('+971', '0');
     const d = JSON.parse(JSON.stringify(o));
-    Object.assign(d, { id: 'L' + (1101 + k), phone: phoneVariant, email: k === 3 ? o.email.toUpperCase() : o.email, source: src, stage: 'New', createdAt: now - (k + 1) * 5 * H, updatedAt: now - (k + 1) * 5 * H, notes: [], proposals: [], payment: null, followUp: null, reason: '',
+    Object.assign(d, { id: 'L' + (1101 + k), phone: phoneVariant, email: k === 3 ? o.email.toUpperCase() : o.email, source: src, stage: 'New', createdAt: now - (k + 4) * 2 * D, updatedAt: now - (k + 4) * 2 * D, notes: [], proposals: [], payment: null, followUp: null, reason: '',
       tags: ['Duplicate'], dupOf: o.id, owner: o.owner, contact: {}, interested: '', appt: {}, payLink: null, ncReason: '', retryAt: null, start: '',
       attr: { platform: src === 'Google' ? 'Google Search' : src === 'Meta' ? 'Instagram' : 'Organic / Direct', campaign: camp, adset, ad, form: src === 'Website' ? 'Contact Us form' : src === 'Meta' ? 'QPH Visa Form' : 'Website enquiry form',
         utm: src === 'Google' ? { utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'qph_search_business_setup_dubai', utm_term: 'freezone license cost' } : src === 'Meta' ? { utm_source: 'instagram', utm_medium: 'paid_social', utm_campaign: 'qph_golden_family_visa_leads' } : { utm_source: '(direct)', utm_medium: '(none)' },
         clickId: src === 'Google' ? 'gclid=Cj0KCQdupEAAYASAA' : '', landing: '' },
-      activity: [{ at: now - (k + 1) * 5 * H, by: 'system', text: `Lead created from ${src} · flagged DUPLICATE of ${o.id} (${o.name})` }] });
+      activity: [{ at: now - (k + 4) * 2 * D, by: 'system', text: `Lead created from ${src} · flagged DUPLICATE of ${o.id} (${o.name})` }] });
     o.activity.push({ at: d.createdAt, by: 'system', text: `Re-enquired via ${src}${camp !== '(none)' ? ' · ' + camp : ''} → duplicate ${d.id}` });
     o.tags.includes('Re-enquired') || o.tags.push('Re-enquired');
     leads.push(d);

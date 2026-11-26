@@ -546,3 +546,52 @@ h1,h2,h3,h4{font-family:"Montserrat",system-ui,sans-serif;font-weight:600;letter
 .tbl th{font-weight:600}
 .tbl td b,.lc-top b,.wa-item b,.list-plain b{font-weight:600}
 .quote-h .total,.ov b{font-weight:600}
+
+/* =========================================================
+   PROFESSIONAL POLISH (Odoo / monday.com feel)
+   ========================================================= */
+:root{--bg:#F7F8FA;--line:#E7E9EE}
+body{background:var(--bg)}
+.card,.stat,.lcard,.int{border-radius:10px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.btn{border-radius:8px;padding:7px 13px;box-shadow:0 1px 1px rgba(16,24,40,.03)}
+.btn-sm{border-radius:7px;padding:5px 10px}
+/* sidebar */
+.side{background:#fff}
+.side-logo{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.side-logo img{height:40px}
+.demo-tag{font-size:10.5px;font-weight:600;color:#6B7280;background:#F1F3F5;border:1px solid var(--line);border-radius:999px;padding:1px 8px;letter-spacing:.04em;text-transform:uppercase}
+.nav-h{font-size:10.5px;color:#9AA3AF;letter-spacing:.1em;padding:18px 12px 6px}
+.nav-i{padding:8px 12px;border-radius:8px;gap:10px;color:#3B4452}
+.nav-i .ic{width:18px;display:inline-grid;place-items:center;color:#7B8494;filter:none!important;opacity:1}
+.nav-i:hover{background:#F4F6F8}
+.nav-i.on{background:#EEF2F7;color:var(--navy);font-weight:600}
+.nav-i.on .ic{color:var(--navy)}
+.nav-i .badge{font-size:11px;font-weight:600;padding:0 7px;line-height:18px;min-width:22px;text-align:center}
+/* top bar */
+.topbar{padding:10px 24px;min-height:58px;border-bottom:1px solid var(--line)}
+.topbar h1{font-size:18px}
+.bell{color:#4B5563;display:grid;place-items:center}
+.search input{background:#F7F8FA;border-color:var(--line)}
+.search input:focus{background:#fff;outline:2px solid #DCE4EE;border-color:#B8C6D8}
+/* page headers + stats */
+.hello{margin-bottom:18px}
+.hello h2{font-size:20px}
+.hello .muted{font-size:13px;margin-top:2px}
+.stat{padding:14px 16px}
+.stat span{font-size:11px;letter-spacing:.06em}
+.stat b{font-size:22px;margin-top:4px}
+.stat small{font-size:11.5px}
+/* tables like a proper list view */
+.tbl th{background:#F9FAFB;color:#6B7280;font-size:11px}
+.tbl td{padding:11px 12px}
+.tbl tr.dup td{background:transparent}
+.tag{background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;border-radius:6px;font-weight:500}
+.sortsel{padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:13px}
+/* forms */
+.form input,.form select,.form textarea,.inp{border-color:#DDE1E7;border-radius:8px}
+.form input:focus,.form select:focus,.form textarea:focus,.inp:focus{outline:2px solid #DCE4EE;border-color:#9FB3C8}
+/* modals */
+.modal{border-radius:14px;box-shadow:0 20px 50px rgba(16,24,40,.18)}
+.modal h2{font-size:17px}
+/* toast */
+.toast{border-radius:10px;font-weight:500;box-shadow:0 8px 24px rgba(16,24,40,.18)}
