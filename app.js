@@ -31,10 +31,10 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 18;
+const APP_V = 19;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
-let C = { leadId: '', type: 'Free Zone', zone: 'ifza', acts: 3, visas: 2, addons: ['medical'], disc: 0 };
+let C = null;
 let waOpen = null;
 let setTab = 'team', campTab = 'campaign', opsMine = false;
 
@@ -249,9 +249,9 @@ function navItems() {
   const contactedN = L.filter(l => ['Contacted', 'Follow-up', 'Not Contacted'].includes(l.stage)).length;
   const custN = S.cases.filter(c => !(acctComplete(c) && c.stage === 'Setup Completed')).length, acctN = S.cases.filter(c => acctComplete(c) && c.stage === 'Setup Completed').length;
   const items = {
-    admin: [['h', 'Overview'], ['dashboard', '', 'Dashboard'], ['campaigns', '', 'Campaigns & UTM'], ['h', 'Leads'], ['newleads', '', 'New Leads', newN, 'hot'], ['leads', '', 'All Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '', 'Cost Calculator'], ['h', 'Operations'], ['customers', '', 'Customers', custN, ''], ['operations', '', 'Operations Board'], ['accounts', '✓', 'Accounts', acctN, ''], ['renewals', '', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '', 'Settings']],
-    sales: [['h', 'My leads'], ['dashboard', '', 'My Dashboard'], ['newleads', '', 'New Leads', newN, 'hot'], ['leads', '', 'All My Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '', 'Cost Calculator']],
-    ops: [['h', 'Operations'], ['dashboard', '', 'Ops Dashboard'], ['customers', '', 'Customers', custN, ''], ['operations', '', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['accounts', '✓', 'Accounts', acctN, ''], ['renewals', '', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '', 'Cost Calculator']],
+    admin: [['h', 'Overview'], ['dashboard', '', 'Dashboard'], ['campaigns', '', 'Campaigns & UTM'], ['h', 'Leads'], ['newleads', '', 'New Leads', newN, 'hot'], ['leads', '', 'All Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['calculator', '', 'Proposals & Calculator'], ['h', 'Operations'], ['customers', '', 'Customers', custN, ''], ['operations', '', 'Operations Board'], ['accounts', '✓', 'Accounts', acctN, ''], ['renewals', '', 'Renewals', renew, 'hot'], ['h', 'Admin'], ['settings', '', 'Settings']],
+    sales: [['h', 'My leads'], ['dashboard', '', 'My Dashboard'], ['newleads', '', 'New Leads', newN, 'hot'], ['leads', '', 'All My Leads', L.length, ''], ['contacted', '📞', 'Contacted', contactedN, ''], ['appointments', '📅', 'Appointments', apptN, 'hot'], ['followups', '', 'Follow-ups', fuDue, 'hot'], ['whatsapp', '💬', 'WhatsApp', unreadN, 'wab'], ['h', 'Tools'], ['calculator', '', 'Proposals & Calculator']],
+    ops: [['h', 'Operations'], ['dashboard', '', 'Ops Dashboard'], ['customers', '', 'Customers', custN, ''], ['operations', '', 'Operations Board', S.cases.filter(c => c.stage !== 'Setup Completed' && c.owner === ME.id).length, ''], ['accounts', '✓', 'Accounts', acctN, ''], ['renewals', '', 'Renewals', renew, 'hot'], ['h', 'Tools'], ['calculator', '', 'Proposals & Calculator']],
   }[ME.role];
   return items.map(i => i[0] === 'h' ? { h: i[1] } : { id: i[0], ic: i[1], label: i[2], badge: i[3], cls: i[4] });
 }
@@ -654,12 +654,6 @@ function uploadPdf(id, input) {
   const done = data => { l.proposals.push({ id: 'P' + (2100 + Math.floor(Math.random() * 900)), at: Date.now(), zone: l.req.zone || S.zones[0].id, total: l.value, visas: +l.req.visas || 0, pdf: f.name, uploaded: true, data }); log(l, `Proposal PDF uploaded: ${f.name}`); const r = autoAdvance(l); save(); render(); toast(r ? `PDF attached - auto-moved to <b>${r[1]}</b>` : 'PDF attached - fill the qualification details to move to Proposal Sent'); };
   if (f.size < 400e3) { const r = new FileReader(); r.onload = () => done(r.result); r.readAsDataURL(f); } else done(null);
 }
-function viewProposal(id, i) {
-  const l = S.leads.find(x => x.id === id); const p = l.proposals[i];
-  if (p.data) { const w = window.open(); w.document.write(`<iframe src="${p.data}" style="border:0;width:100%;height:100%"></iframe>`); return; }
-  if (p.uploaded) return toast('Demo: large PDFs are stored by name only (' + p.pdf + ')');
-  const keep = C; C = Object.assign({ leadId: id, type: zoneOf(p.zone).type, zone: p.zone, acts: 3, visas: p.visas, addons: ['medical'], disc: 0 }, p.snap || {}); printQuote(); C = keep;
-}
 function sendPay(id) {
   const l = S.leads.find(x => x.id === id); const p = l.payment || {};
   const m = [[+p.amount > 0, 'Amount received', 'payment.amount'], [has(p.mode), 'Payment mode', 'payment.mode'], [has(p.ref), 'Reference / transaction code', 'payment.ref'], [has(p.date), 'Payment date']].filter(c => !c[0]).map(c => c[1]);
@@ -688,8 +682,6 @@ function openCaseFor(l, silent) {
   notify(owner, `New customer case ${c.id}: ${c.company} (paid ${l.payment ? aed(l.payment.amount) : ''})`, 'case:' + c.id); notify('u1', `${l.name} is now a customer → ${user(owner).name} (Operations)`, 'case:' + c.id);
   setTimeout(() => toast(`Customer case ${c.id} created → ${user(owner).name}`), 1200);
 }
-function proposalFor(id) { const l = S.leads.find(x => x.id === id); C = { leadId: id, type: l.req.type || 'Free Zone', zone: has(l.req.zone) ? l.req.zone : S.zones.find(z => z.type === (l.req.type || 'Free Zone')).id, acts: 3, visas: +l.req.visas || 1, addons: ['medical'], disc: 0 }; drawer = null; go('calculator'); }
-
 /* ---------------- add / simulate ---------------- */
 function addLeadModal() {
   modal(`<h2>+ Create lead</h2><div class="muted small">Walk-in, call or referral. Duplicate check runs as you type.</div><div class="form">
@@ -778,58 +770,146 @@ function waSend(id) {
 }
 
 /* ---------------- calculator ---------------- */
-function vCalc() {
-  const e = estimate(C); const z = e.z; const lead = S.leads.find(l => l.id === C.leadId);
-  const zones = S.zones.filter(x => x.type === C.type);
-  const leads = visibleLeads().filter(l => !['Lost', 'Junk'].includes(l.stage));
-  const cmp = zones.map(x => ({ x, t: estimate(Object.assign({}, C, { zone: x.id })).total })).sort((a, b) => a.t - b.t);
-  return `<div class="calc"><div class="card"><div class="card-h"><h2>Business setup cost calculator</h2><span class="small muted">Indicative prices · edit in Settings</span></div><div class="card-b">
-    <div class="form" style="margin-top:0">
-      <div class="full"><label>Link to lead (fills proposal)</label><select onchange="C.leadId=this.value;const l=S.leads.find(x=>x.id===this.value);if(l){C.type=l.req.type;C.zone=l.req.zone;C.visas=l.req.visas}render()"><option value="">- No lead (quick quote) -</option>${leads.map(l => `<option value="${l.id}" ${l.id === C.leadId ? 'selected' : ''}>${esc(l.name)} · ${l.id} · ${esc(l.stage)}</option>`).join('')}</select></div>
-      <div class="full"><label>Jurisdiction</label><div class="seg">${['Free Zone', 'Mainland', 'Offshore'].map(t => `<button class="${C.type === t ? 'on' : ''}" onclick="C.type='${t}';C.zone=S.zones.find(z=>z.type==='${t}').id;render()">${t}</button>`).join('')}</div></div>
-      <div class="full"><label>${C.type === 'Free Zone' ? 'Free zone' : 'Authority'}</label><div class="zone-cards">${zones.map(x => `<button class="zc ${x.id === C.zone ? 'on' : ''}" onclick="C.zone='${x.id}';render()"><b>${esc(x.name)}</b><span>${esc(x.emirate)} · from ${aed(x.licence)}</span></button>`).join('')}</div></div>
-      <div><label>Business activities</label><input type="number" min="1" max="10" value="${C.acts}" onchange="C.acts=+this.value;render()"><span class="small muted">${z.inclActs} included</span></div>
-      <div><label>Visas ${z.maxVisas ? '(max ' + z.maxVisas + ')' : '(not available)'}</label><input type="number" min="0" max="${z.maxVisas}" value="${e.visas}" ${z.maxVisas ? '' : 'disabled'} onchange="C.visas=+this.value;render()"></div>
-      <div class="full"><label>Add-ons</label><div class="opts">${S.addons.map(a => `<label class="opt ${C.addons.includes(a.id) ? 'on' : ''}"><input type="checkbox" ${C.addons.includes(a.id) ? 'checked' : ''} onchange="C.addons=this.checked?[...C.addons,'${a.id}']:C.addons.filter(x=>x!=='${a.id}');render()"> ${esc(a.name)}<em>${aed(a.price)}${a.per === 'visa' ? '/visa' : ''}</em></label>`).join('')}</div></div>
-      <div><label>Discount on service fee (%)</label><input type="number" min="0" max="100" value="${C.disc}" onchange="C.disc=+this.value;render()"></div>
-      <div><label>QPH service fee</label><input value="${aed(S.serviceFee)}" disabled></div>
-    </div></div></div>
-    <div class="calc-side"><div class="card quote"><div class="quote-h"><small>${lead ? 'Proposal for ' + esc(lead.name) : 'Quick quote'} · ${esc(z.name)}</small><div class="total">${aed(e.total)}</div><small>${e.visas} visa(s) · ${C.acts} activit${C.acts > 1 ? 'ies' : 'y'} · ${esc(z.type)}</small></div><div class="card-b">
-      ${e.rows.map(r => `<div class="qrow"><span>${esc(r[0])}</span><b>${aed(r[1])}</b></div>`).join('')}
-      <div class="qrow sub"><span>Government & third-party fees</span><span>${aed(e.govt)}</span></div>
-      <div class="qrow"><span>QPH service fee</span><b>${aed(e.fee)}</b></div>
-      ${e.disc ? `<div class="qrow" style="color:var(--green)"><span>Discount ${C.disc}%</span><b>− ${aed(e.disc)}</b></div>` : ''}
-      <div class="qrow sub"><span>VAT 5% on service fee</span><span>${aed(e.vat)}</span></div>
-      <div class="qrow sum"><span>Total</span><span>${aed(e.total)}</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px">
-        <button class="btn btn-primary" onclick="saveProposal()" ${lead ? '' : 'disabled title="Link a lead first"'}>Save proposal to lead</button>
-        <button class="btn" onclick="printQuote()">Print / PDF</button>
-        <a class="btn btn-wa" target="_blank" href="${waLink(lead ? lead.phone : '', quoteText(e, lead))}">💬 Send on WhatsApp</a>
-      </div></div></div>
-    <div class="card" style="margin-top:16px"><div class="card-h"><h2>Compare ${C.type === 'Free Zone' ? 'free zones' : 'options'}</h2><span class="small muted">same visas & add-ons</span></div><div class="card-b">${bars(cmp.map(({ x, t }) => [x.name, t, aed(t)]))}</div></div></div>
-  </div><div id="printArea" hidden></div>`;
+/* ---------------- QPH Proposal Builder ---------------- */
+function C_DEF() { return { leadId: '', client: '', acts: [], type: 'Free Zone', zone: 'ifza', visas: 2, disc: 0, inside: 0, investors: 0, addons: [], notes: '', view: 'quote', at: Date.now() }; }
+function ensureC() { if (!C || !Array.isArray(C.acts)) C = Object.assign(C_DEF(), C && typeof C === 'object' ? { leadId: C.leadId || '', type: C.type || 'Free Zone', zone: C.zone || 'ifza', visas: C.visas ?? 2 } : {}); }
+const ADDON_LABEL = { office: 'Dedicated office upgrade (yearly)' };
+function quote(c) {
+  const z = zoneOf(c.zone); const visas = Math.min(+c.visas || 0, z.maxVisas); const rows = [];
+  const lic = z.licence; const disc = Math.round(lic * (+c.disc || 0) / 100);
+  rows.push([`${z.name} licence fee${visas ? ` (${visas} visa allocation)` : ''}`, lic, 'bold']);
+  if (disc) rows.push([`Special discount (${c.disc}% on licence fee)`, -disc, 'disc']);
+  const extra = Math.max(0, (c.acts.length || 1) - z.inclActs); if (extra && z.extraAct) rows.push([`Additional activities (${extra} x ${aed(z.extraAct)})`, extra * z.extraAct]);
+  if (z.type !== 'Offshore') rows.push(['Business licence & flexi-desk', 0, 'incl']);
+  rows.push(['Corporate bank account opening assistance', 0, 'incl']);
+  if (visas > 0) { rows.push(['Establishment / immigration card', z.estCard]); rows.push([`Residence visa (${visas} x ${aed(z.perVisa)})`, visas * z.perVisa]); rows.push([`Medical fitness test (${visas} x AED 370)`, visas * 370]); rows.push([`Emirates ID (${visas} x AED 390)`, visas * 390]); }
+  const inside = Math.min(+c.inside || 0, visas); if (inside) rows.push([`Visa status change (${inside} x AED 1,600)`, inside * 1600]);
+  const inv = Math.min(+c.investors || 0, visas); if (inv) rows.push([`Investor visa (${inv} x AED 1,000)`, inv * 1000]);
+  c.addons.forEach(id => { const a = S.addons.find(x => x.id === id); if (!a || ['medical', 'changeStatus', 'bank'].includes(id)) return; rows.push([ADDON_LABEL[id] || a.name, a.per === 'visa' ? a.price * visas : a.price]); });
+  const fee = S.serviceFee; rows.push(['QPH professional fee', fee]); rows.push(['VAT 5% on professional fee', Math.round(fee * 0.05)]);
+  return { z, visas, rows, total: rows.reduce((s, r) => s + r[1], 0), disc, inside, inv };
 }
-function quoteText(e, l) { return `Hi ${l ? l.name.split(' ')[0] : ''}, here is your Quick Path Horizon setup estimate:\n\n${e.z.name} (${e.z.type})\n${e.rows.map(r => '• ' + r[0] + ': ' + aed(r[1])).join('\n')}\n• Service fee: ${aed(e.feeNet)} + VAT ${aed(e.vat)}\n\nTOTAL: ${aed(e.total)}\n\nValid for 7 days. Reply YES to proceed!`; }
+const pno = c => 'QPH-' + new Date(c.at || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '') + '-' + initials(c.client || 'Valued Client');
+const slugU = t => String(t).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const pfile = c => `${slugU(zoneOf(c.zone).name)}_Proposal_${slugU(c.client || 'Client')}_${pno(c)}.pdf`;
+function docHTML(c) {
+  const q = quote(c); const z = q.z; const client = esc(c.client || 'Valued Client'); const date = new Date(c.at || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const money = r => r[2] === 'incl' ? '<span class="pd-incl">Included</span>' : r[2] === 'disc' ? `<span class="pd-disc">- ${Math.abs(r[1]).toLocaleString('en-US')}</span>` : r[1].toLocaleString('en-US');
+  const notes = [q.visas ? `This package includes ${q.visas} residence visa(s). Medical insurance is mandatory for each visa holder and is not included above; plans usually start from AED 290 per person.` : 'This package does not include residence visas. Visas can be added later within the licence quota.',
+    q.inside ? `The visa status change fee (AED 1,600 per person) applies only to visa holders inside the UAE at the time of application.` : 'Visa holders applying from outside the UAE do not pay the status change fee.',
+    q.disc ? `The ${c.disc}% discount applies to the licence fee only. Establishment card and visa charges are government fees shown at cost.` : 'Government fees are shown at cost and may change if the authority revises them.',
+    ...String(c.notes || '').split('\n').map(x => x.trim()).filter(Boolean)];
+  return `<div class="pdoc">
+  <div class="pd-head"><img src="logo.png" alt="Quick Path Horizon"><div class="pd-contact">058 146 4678<br>Info@quickpathhorizon.com<br>www.quickpathhorizon.com<br>Dubai, United Arab Emirates</div></div>
+  <div class="pd-rule"><i></i><i></i></div>
+  <h1>COMPANY FORMATION PROPOSAL</h1><div class="pd-sub">${esc(z.type)} Company Setup - ${esc(z.name)}, ${esc(z.emirate)}</div>
+  <table class="pd-meta"><tr><td>Proposal No.</td><td>${pno(c)}</td></tr><tr><td>Prepared For</td><td>${client}</td></tr><tr><td>Date</td><td>${date}</td></tr><tr><td>Subject</td><td>Company setup package - ${esc(z.name)} - ${q.visas} visa package</td></tr></table>
+  <h3>INTRODUCTION</h3><p>Dear ${client}, thank you for choosing Quick Path Horizon. Please find below our proposal for company formation in ${esc(z.name)}, ${esc(z.emirate)}, covering the trade licence${q.visas ? `, establishment card and ${q.visas} residence visa(s)` : ''} for your business.${q.disc ? ` We are pleased to offer you a special ${c.disc}% discount on the licence fee.` : ''}</p>
+  <h3>BUSINESS ACTIVITY</h3><p>The recommended activity for your business is listed below.</p>
+  <table class="pd-tbl"><thead><tr><th>Activity</th><th style="width:110px">Code</th><th>Description</th></tr></thead><tbody>${c.acts.length ? c.acts.map((a, i) => `<tr><td>${i + 1}. ${esc(a.name || '-')}</td><td>${esc(a.code || '-')}</td><td>${esc(a.desc || '-')}</td></tr>`).join('') : '<tr><td>1. [Business activity]</td><td>-</td><td>-</td></tr>'}</tbody></table>
+  <h3>PACKAGE & PRICING (${q.visas} VISA${q.visas === 1 ? '' : 'S'})</h3>
+  <table class="pd-tbl price"><thead><tr><th>Service</th><th>Price (AED)</th></tr></thead><tbody>${q.rows.map(r => `<tr class="${r[2] === 'bold' ? 'b' : ''}"><td>${esc(r[0])}</td><td>${money(r)}</td></tr>`).join('')}<tr class="tot"><td>TOTAL (${q.visas} visa${q.visas === 1 ? '' : 's'})</td><td>AED ${q.total.toLocaleString('en-US')}</td></tr></tbody></table>
+  <h3>IMPORTANT NOTES</h3><ul>${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+  <h3>DOCUMENTS REQUIRED</h3><ul><li>Passport copy of each shareholder and visa holder</li><li>Passport-size photo with white background</li><li>Current UAE visa and Emirates ID copy (if available)</li><li>Three trade name options</li><li>Email address and mobile number</li></ul>
+  <h3>TERMS AND CONDITIONS</h3>
+  <div class="pd-terms"><b>Validity</b><p>This proposal is valid for 30 days from the date of issue. If the free zone or any government authority revises its fees before payment, the revised fees will apply.</p>
+  <b>Payment terms</b><p>Full advance payment is required to start the process. Additional activities, office upgrades, third-party approvals and document attestation are charged separately where applicable.</p>
+  <b>Disclaimer</b><p>Approvals are at the sole discretion of the relevant authorities and cannot be guaranteed. Procedures and fees are based on regulations in force on the date of issue.</p>
+  <b>Client responsibilities</b><p>The client must provide complete and genuine documents. Delays or rejections caused by incomplete information are not our responsibility, and any re-submission fees are charged at cost.</p>
+  <b>Cancellation & refund</b><p>Cancellation requests must be sent in writing within 5 working days. Government and free zone fees already paid are non-refundable; our professional fee is non-refundable once work has started.</p>
+  <b>Governing law</b><p>This engagement is governed by the laws of the United Arab Emirates as applied in the Emirate of Dubai.</p>
+  <b>Acceptance</b><p>Payment of the quoted amount confirms acceptance of this proposal and these terms.</p></div>
+  <h3>OUR SERVICES</h3>
+  <div class="pd-svc">${[['Business Setup & Company Formation', 'Free zone, mainland and offshore company formation with licences and approvals handled end to end.', 'Free Zone · Mainland · Offshore'], ['PRO Services', 'Visa applications, labour cards, Emirates ID and all government documentation.', 'Visas · Emirates ID · Labour'], ['Legal & Corporate Services', 'Drafting and notarising documents and keeping your business compliant with UAE law.', 'MOA · Notary · Compliance'], ['Business Consultation & Advisory', 'Feasibility studies, strategy planning and ongoing operational support.', 'Strategy · Feasibility · Support'], ['Visa Services', 'Employment, family, partner and golden visa processing.', 'Employment · Family · Golden'], ['Cancellation Services', 'Company, visa and labour cancellations handled without the hassle.', 'Company · Visa · Labour']].map((s, i) => `<div class="pd-svc-i"><b>${String(i + 1).padStart(2, '0')}  ${s[0]}</b><span>${s[1]}</span><em>${s[2]}</em></div>`).join('')}</div>
+  <div class="pd-foot">Quick Path Horizon Corporate Services · Dubai, UAE · 058 146 4678 · Info@quickpathhorizon.com</div>
+  </div>`;
+}
+function rateCardHTML() {
+  const zs = S.zones;
+  return `<div class="pdoc"><div class="pd-head"><img src="logo.png" alt="Quick Path Horizon"><div class="pd-contact">Rate card<br>Indicative prices in AED<br>Edit in Settings → Price list</div></div><div class="pd-rule"><i></i><i></i></div>
+  <h1>RATE CARD</h1><div class="pd-sub">Licence, visa and establishment card fees by free zone / authority</div>
+  <table class="pd-tbl price rc"><thead><tr><th>Zone</th><th>Type</th><th>Licence</th><th>Per visa</th><th>Est. card</th><th>Incl. activities</th></tr></thead><tbody>${zs.map(z => `<tr class="${z.id === C.zone ? 'b' : ''}" style="cursor:pointer" onclick="C.zone='${z.id}';C.type='${z.type}';C.view='quote';render()"><td>${esc(z.name)}<br><small>${esc(z.emirate)}</small></td><td>${esc(z.type)}</td><td>${z.licence.toLocaleString('en-US')}</td><td>${z.perVisa ? z.perVisa.toLocaleString('en-US') : '-'}</td><td>${z.estCard ? z.estCard.toLocaleString('en-US') : '-'}</td><td>${z.inclActs}</td></tr>`).join('')}</tbody></table>
+  <h3>ADD-ONS</h3><table class="pd-tbl price"><thead><tr><th>Service</th><th>Price (AED)</th></tr></thead><tbody>${S.addons.map(a => `<tr><td>${esc(ADDON_LABEL[a.id] || a.name)}</td><td>${a.price.toLocaleString('en-US')}${a.per === 'visa' ? ' / visa' : ''}</td></tr>`).join('')}<tr><td>QPH professional fee (+5% VAT)</td><td>${S.serviceFee.toLocaleString('en-US')}</td></tr></tbody></table>
+  <p class="pd-small">Click a zone to build a quote for it.</p></div>`;
+}
+function calcRefresh() { const d = $('pbDoc'); if (d && C.view === 'quote') d.innerHTML = docHTML(C); const t = $('pbTotal'); if (t) t.textContent = aed(quote(C).total); }
+function calcLead(id) {
+  C.leadId = id; const l = S.leads.find(x => x.id === id);
+  if (l) { C.client = l.name; C.type = l.req.type || 'Free Zone'; C.zone = has(l.req.zone) && zoneOf(l.req.zone).type === C.type ? l.req.zone : S.zones.find(z => z.type === C.type).id; C.visas = +l.req.visas || 0; C.acts = l.req.activity ? [{ name: l.req.activity, code: '', desc: '' }] : []; }
+  render();
+}
+function addAct() { const v = $('actIn').value.trim(); if (!v) return toast('Type the activity first'); C.acts.push({ name: v, code: '', desc: '' }); render(); }
+function vCalc() {
+  ensureC(); const q = quote(C); const z = q.z; const lead = S.leads.find(l => l.id === C.leadId);
+  const leads = visibleLeads().filter(l => !['Lost', 'Junk'].includes(l.stage));
+  const zones = S.zones.filter(x => x.type === C.type);
+  const all = visibleLeads().flatMap(l => l.proposals.map((p, i) => ({ l, p, i }))).sort((a, b) => b.p.at - a.p.at);
+  const addonIds = S.addons.filter(a => !['medical', 'changeStatus', 'bank'].includes(a.id));
+  return `<div class="hello"><div><h2>Proposals & cost calculator</h2><div class="muted">Pick a lead to pre-fill the calculator. The PDF saves to that lead automatically.</div></div>
+    <select class="lead-pick" onchange="calcLead(this.value)"><option value="">Choose lead (optional)</option>${leads.map(l => `<option value="${l.id}" ${l.id === C.leadId ? 'selected' : ''}>${esc(l.name)} · ${esc(l.stage)}</option>`).join('')}</select></div>
+  <div class="pb"><div class="pb-h"><div><h2>QPH Proposal Builder</h2><p>Pick the free zone, visas and discount. The proposal on the right updates as you type.</p></div>
+    <div class="pb-seg"><button class="${C.view === 'quote' ? 'on' : ''}" onclick="C.view='quote';render()">Quote</button><button class="${C.view === 'rate' ? 'on' : ''}" onclick="C.view='rate';render()">Rate card</button></div></div>
+  <div class="pb-grid"><div class="pb-form">
+    <div class="pb-sec">Client & package</div>
+    <label class="pb-l">Client name</label><div class="pb-hint">As it should appear, e.g. Mr. Ahmed Khan</div>
+    <input class="pb-in" value="${esc(C.client)}" placeholder="Client name" oninput="C.client=this.value;calcRefresh()">
+    <button class="pb-btn sm" onclick="C=C_DEF();render()">New client (clear)</button>
+    <label class="pb-l">Business activities</label><div class="pb-hint">Type the activity and add it. Add the authority's activity code if you have it.</div>
+    <div style="display:flex;gap:6px"><input id="actIn" class="pb-in" list="actList2" placeholder="e.g. General Trading" onkeydown="if(event.key==='Enter')addAct()"><button class="pb-btn" onclick="addAct()">Add</button></div><datalist id="actList2">${ACTIVITIES.map(a => `<option>${a}</option>`).join('')}</datalist>
+    ${C.acts.map((a, i) => `<div class="pb-act"><div style="display:flex;gap:6px"><input class="pb-in" value="${esc(a.name)}" placeholder="Activity" oninput="C.acts[${i}].name=this.value;calcRefresh()"><input class="pb-in" style="max-width:110px" value="${esc(a.code)}" placeholder="Code" oninput="C.acts[${i}].code=this.value;calcRefresh()"><button class="pb-x" onclick="C.acts.splice(${i},1);render()">×</button></div><textarea class="pb-in" rows="2" placeholder="Description (optional)" oninput="C.acts[${i}].desc=this.value;calcRefresh()">${esc(a.desc)}</textarea></div>`).join('')}
+    <div class="pb-hint">${z.inclActs} activities included in ${esc(z.name)}${C.acts.length > z.inclActs ? ` · ${C.acts.length - z.inclActs} extra charged` : ''}</div>
+    <label class="pb-l">Jurisdiction</label>
+    <div class="pb-seg full">${['Free Zone', 'Mainland', 'Offshore'].map(t => `<button class="${C.type === t ? 'on' : ''}" onclick="C.type='${t}';C.zone=S.zones.find(z=>z.type==='${t}').id;render()">${t}</button>`).join('')}</div>
+    <label class="pb-l">${C.type === 'Free Zone' ? 'Free zone' : 'Authority'}</label>
+    <div class="pb-zones">${zones.map(x => `<button class="${x.id === C.zone ? 'on' : ''}" onclick="C.zone='${x.id}';render()"><b>${esc(x.name)}</b><span>${esc(x.emirate)}</span></button>`).join('')}</div>
+    ${z.maxVisas ? `<label class="pb-l">Visas</label><div class="pb-step"><button onclick="C.visas=Math.max(0,(+C.visas||0)-1);render()">−</button><b>${q.visas}</b><button onclick="C.visas=Math.min(${z.maxVisas},(+C.visas||0)+1);render()">+</button><span class="pb-hint" style="margin:0 0 0 8px">max ${z.maxVisas}</span></div>` : `<div class="pb-hint">Offshore companies do not include visas.</div>`}
+    <label class="pb-l">Discount on licence fee</label>
+    <div class="pb-disc">${[0, 10, 15, 20, 25, 30, 35, 40, 50].map(d => `<button class="${+C.disc === d ? 'on' : ''}" onclick="C.disc=${d};render()">${d}%</button>`).join('')}</div>
+    ${q.visas ? `<div class="pb-box"><label class="pb-l" style="margin-top:0">Visa holders inside the UAE</label><div class="pb-hint">Adds the status change fee for each</div><input class="pb-in" type="number" min="0" max="${q.visas}" value="${q.inside}" onchange="C.inside=+this.value;render()">
+    <label class="pb-l">Investor visas (partners)</label><div class="pb-hint">AED 1,000 extra per investor visa</div><input class="pb-in" type="number" min="0" max="${q.visas}" value="${q.inv}" onchange="C.investors=+this.value;render()"></div>` : ''}
+    <label class="pb-l">Add-ons</label>
+    ${addonIds.map(a => `<label class="pb-chk"><input type="checkbox" ${C.addons.includes(a.id) ? 'checked' : ''} onchange="C.addons=this.checked?[...C.addons,'${a.id}']:C.addons.filter(x=>x!=='${a.id}');render()"> <span>${esc(ADDON_LABEL[a.id] || a.name)}</span><em>${aed(a.price)}${a.per === 'visa' ? '/visa' : ''}</em></label>`).join('')}
+    <label class="pb-l">Extra notes</label><div class="pb-hint">Optional, one per line. Shown under Important Notes</div>
+    <textarea class="pb-in" rows="3" placeholder="e.g. The special discount is valid for confirmations received this month." oninput="C.notes=this.value;calcRefresh()">${esc(C.notes)}</textarea>
+    <div class="pb-total"><span>Total</span><b id="pbTotal">${aed(q.total)}</b></div>
+    <div class="pb-actions">
+      ${lead ? `<button class="pb-btn primary" onclick="saveProposal()">Save proposal to lead</button>` : ''}
+      <button class="pb-btn ${lead ? '' : 'primary'}" onclick="printQuote()">Download PDF</button>
+      <button class="pb-btn" onclick="navigator.clipboard&&navigator.clipboard.writeText(quoteText(C));toast('WhatsApp summary copied')">Copy WhatsApp summary</button>
+      ${lead ? `<a class="pb-btn wa" target="_blank" href="${waLink(lead.phone, quoteText(C))}">💬 Send on WhatsApp</a>` : ''}
+    </div>
+  </div>
+  <div class="pb-doc" id="pbDoc">${C.view === 'quote' ? docHTML(C) : rateCardHTML()}</div></div></div>
+  <div class="card" style="margin-top:18px"><div class="card-h"><h2>All proposals (${all.length})</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Proposal</th><th>Client</th><th>Zone</th><th class="num">Visas</th><th class="num">Total</th><th>Date</th><th>Stage</th><th></th></tr></thead><tbody>
+  ${all.slice(0, 40).map(({ l, p, i }) => `<tr><td><b>${esc(p.id)}</b><span class="sub">${esc(p.pdf || '')}</span></td><td>${esc(l.name)}</td><td>${esc(zoneOf(p.zone).name)}</td><td class="num">${p.visas}</td><td class="num">${p.total ? aed(p.total) : '-'}</td><td class="small muted">${fmtDate(p.at, false)}</td><td>${pill(l.stage)}</td><td><button class="btn btn-sm" onclick="viewProposal('${l.id}',${i})">Open</button></td></tr>`).join('') || '<tr><td colspan="8"><div class="empty">No proposals yet</div></td></tr>'}
+  </tbody></table></div></div><div id="printArea" hidden></div>`;
+}
+function quoteText(c, l) {
+  if (!c || !Array.isArray(c.acts)) { ensureC(); c = C; }
+  const q = quote(c); const first = (c.client || 'there').split(' ')[0];
+  return `Hi ${first}, here is your Quick Path Horizon proposal (${pno(c)}):\n\n${q.z.name} - ${q.z.type}, ${q.visas} visa(s)\n${q.rows.filter(r => r[2] !== 'incl').map(r => '- ' + r[0] + ': ' + (r[1] < 0 ? '- ' : '') + aed(Math.abs(r[1]))).join('\n')}\n\nTOTAL: ${aed(q.total)}\n\nValid for 30 days. Reply YES to proceed.`;
+}
 function saveProposal() {
-  const l = S.leads.find(x => x.id === C.leadId); if (!l) return; const e = estimate(C);
-  const pid = 'P' + (2100 + Math.floor(Math.random() * 900)); const p = { id: pid, at: Date.now(), zone: C.zone, total: e.total, visas: e.visas, pdf: 'QPH-Proposal-' + pid + '.pdf', snap: Object.assign({}, C) };
-  l.proposals.push(p); l.value = e.total; l.req.zone = C.zone; l.req.type = C.type; l.req.visas = e.visas;
-  log(l, `Proposal ${p.id} created · ${e.z.name} · ${aed(e.total)}`);
-  const r = autoAdvance(l); const before = !!r;
-  save(); render(); toast(`Proposal ${p.id} (PDF) saved to ${l.name}${before ? ' · auto-moved to ' + r[1] : missing(l, 'Proposal Sent').length ? ' · qualify the lead first to move to Proposal Sent' : ''}`);
+  const l = S.leads.find(x => x.id === C.leadId); if (!l) return toast('Choose a lead first');
+  const q = quote(C); C.at = Date.now(); if (!C.client) C.client = l.name;
+  const p = { id: pno(C), at: Date.now(), zone: C.zone, total: q.total, visas: q.visas, pdf: pfile(C), snap: JSON.parse(JSON.stringify(C)) };
+  l.proposals.push(p); l.value = q.total; l.req.zone = C.zone; l.req.type = C.type; l.req.visas = q.visas; if (C.acts[0] && !l.req.activity) l.req.activity = C.acts[0].name;
+  log(l, `Proposal ${p.id} created · ${q.z.name} · ${aed(q.total)}`);
+  const r = autoAdvance(l); save(); render(); toast(`Proposal ${p.id} saved to ${l.name}${r ? ' · moved to ' + r[1] : ''}`);
 }
 function printQuote() {
-  const e = estimate(C); const l = S.leads.find(x => x.id === C.leadId); const pa = $('printArea'); pa.hidden = false;
-  pa.innerHTML = `<div style="padding:40px;font-family:'Libre Franklin',sans-serif;color:#0E2A47"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #E46E1B;padding-bottom:16px"><img src="logo.png" style="height:56px"><div style="text-align:right;font-size:12px">Quick Path Horizon Corporate Services<br>Dubai, UAE · 0581464678<br>Info@quickpathhorizon.com</div></div>
-  <h1 style="margin:24px 0 4px">Business Setup Proposal</h1><div style="color:#5A6B7D">${l ? 'Prepared for ' + esc(l.name) + ' · ' : ''}${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })} · valid 7 days</div>
-  <h3 style="margin-top:24px">${esc(e.z.name)} - ${esc(e.z.type)} · ${e.visas} visa(s) · ${C.acts} activities</h3>
-  <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:14px">${e.rows.map(r => `<tr><td style="padding:8px;border-bottom:1px solid #E3E8EE">${esc(r[0])}</td><td style="padding:8px;border-bottom:1px solid #E3E8EE;text-align:right">${aed(r[1])}</td></tr>`).join('')}
-  <tr><td style="padding:8px;border-bottom:1px solid #E3E8EE">QPH service fee${e.disc ? ' (after ' + C.disc + '% discount)' : ''}</td><td style="padding:8px;border-bottom:1px solid #E3E8EE;text-align:right">${aed(e.feeNet)}</td></tr>
-  <tr><td style="padding:8px">VAT 5% on service fee</td><td style="padding:8px;text-align:right">${aed(e.vat)}</td></tr>
-  <tr><td style="padding:12px 8px;font-weight:800;font-size:18px;border-top:2px solid #0E2A47">Total</td><td style="padding:12px 8px;font-weight:800;font-size:18px;text-align:right;border-top:2px solid #0E2A47;color:#E46E1B">${aed(e.total)}</td></tr></table>
-  <p style="font-size:12px;color:#5A6B7D;margin-top:30px">Government fees are indicative and subject to change by the issuing authority. Demo proposal generated by QPH CRM.</p></div>`;
-  setTimeout(() => { window.print(); pa.hidden = true; }, 200);
+  ensureC(); const pa = $('printArea') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'printArea' }));
+  pa.hidden = false; pa.innerHTML = docHTML(C);
+  setTimeout(() => { window.print(); pa.hidden = true; }, 250);
 }
+function viewProposal(id, i) {
+  const l = S.leads.find(x => x.id === id); const p = l.proposals[i];
+  if (p.data) { const w = window.open(); w.document.write(`<iframe src="${p.data}" style="border:0;width:100%;height:100%"></iframe>`); return; }
+  if (p.uploaded) return toast('Demo: large PDFs are stored by name only (' + p.pdf + ')');
+  C = Object.assign(C_DEF(), { leadId: id, client: l.name, type: zoneOf(p.zone).type, zone: p.zone, visas: p.visas, acts: l.req.activity ? [{ name: l.req.activity, code: '', desc: '' }] : [], at: p.at }, p.snap && Array.isArray(p.snap.acts) ? p.snap : {});
+  C.view = 'quote'; drawer = null; go('calculator');
+}
+function proposalFor(id) { C = C_DEF(); drawer = null; route = 'calculator'; location.hash = 'calculator'; calcLead(id); }
 
 /* ---------------- campaigns ---------------- */
 function vCampaigns() {
