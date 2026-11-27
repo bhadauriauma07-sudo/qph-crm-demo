@@ -31,7 +31,7 @@ let ME = null;
 let route = 'dashboard';
 let period = '30';
 let drawer = null; // {kind:'lead'|'case', id}
-const APP_V = 19;
+const APP_V = 20;
 const BLANK_LF = () => ({ stage: [], source: [], campaign: [], owner: [], temp: [], dup: false, pay: false });
 let leadFilter = BLANK_LF(); let opsFilter = { stage: [], owner: [] }; let openMs = null; const MS = {};
 let C = null;
@@ -1169,7 +1169,8 @@ function setVM(r, m) { VM[r] = m; localStorage.setItem('qph_vm', JSON.stringify(
 function vmToggle(r, modes = ['list', 'grid']) { const lbl = { list: 'List', grid: '▦ Grid', calendar: '🗓 Calendar' }; return `<div class="seg">${modes.map(m => `<button class="${vmOf(r) === m ? 'on' : ''}" onclick="setVM('${r}','${m}')">${lbl[m]}</button>`).join('')}</div>`; }
 function leadCard(l, extra) {
   return `<div class="lcard" onclick="openLead('${l.id}')">
-    <div class="lc-top">${av(l.owner, 30)}<div style="min-width:0;flex:1"><b>${esc(l.name)}</b><div class="sub">${esc(l.phone)}</div></div>${pill(l.stage)}</div>
+    <div class="lc-top">${av(l.owner, 30)}<div style="min-width:0;flex:1"><b>${esc(l.name)}</b><div class="sub">${esc(l.phone)}</div></div></div>
+    <div class="lc-stage">${pill(l.stage)}</div>
     <div class="lc-mid"><span>${esc(l.source)}${l.attr.campaign && l.attr.campaign !== '(none)' ? ' · ' + esc(l.attr.campaign) : ''}</span>${l.req.activity ? `<span>${esc(l.req.activity)}${has(l.req.zone) ? ' · ' + esc(zoneOf(l.req.zone).name) : ''}</span>` : ''}</div>
     ${extra ? `<div class="lc-extra">${extra}</div>` : ''}
     <div class="lc-foot">${l.temp === 'Hot' ? pill('Hot', 'p-hot') : ''}${l.dupOf ? pill('Duplicate', 'p-dup') : ''}<span class="small muted" style="margin-left:auto">${ago(l.createdAt)}</span>

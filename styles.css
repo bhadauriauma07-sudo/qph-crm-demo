@@ -776,3 +776,19 @@ textarea.pb-in{resize:vertical;margin-top:6px}
 .pd-small{font-size:11px;color:#6B7280;margin-top:10px}
 @media (max-width:1150px){.pb-grid{grid-template-columns:1fr}.pb-doc{position:static;max-height:none}}
 @media print{#printArea .pdoc{box-shadow:none;padding:24px 28px;max-width:none}}
+
+/* ---------- grid cards: nothing gets cut ---------- */
+.cards{grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+.cards>.lcard,.kcol2>.lcard{min-width:0}
+.lcard>*{min-width:0}
+.lc-stage{margin-top:-2px}
+.lc-stage .pill{max-width:100%}
+.lc-extra{overflow:hidden}
+.lc-act{gap:6px}
+.lc-act .btn{flex:0 1 auto}
+.lc-foot{flex-wrap:wrap;row-gap:6px}
+.lc-foot .small{margin-left:auto}
+/* sidebar logo + demo tag */
+.side-logo{flex-direction:column;align-items:flex-start;gap:6px;padding:16px 18px 12px}
+.side-logo img{height:38px;max-width:100%}
+.demo-tag{font-size:10px;padding:1px 8px}
